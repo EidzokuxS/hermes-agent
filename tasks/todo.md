@@ -162,3 +162,26 @@ Task 11 deterministic target perspective пройден на clean commit `87fbc
 Повторные POST/correctness/maintainability gates закрыты без внутренних замечаний после `6013bb3` и `a28cb6f`: bounded runtime/Desktop lookups, durable operational failures, live-window guards и sticky health hydration проверены. Финальный clean deterministic bundle `task11-deterministic-a28cb6f` дважды verified 16/16 (`sourceTreeDirty=false`, redaction pass, State v3). Единственный оставшийся acceptance blocker — успешный full real-Pi run; Task 11 и goal остаются открытыми.
 
 Task 11 завершён full bundle `real-pi-zai-glm47-20260712-1629` на clean commit `486eabf`: `zai/glm-4.7` выполнил два schema-valid `propose_act` по одной provider attempt, между Act runtime пережил принудительный `SIGKILL` и смену PID `45140 -> 43916`. Manifest содержит ровно 27 artifacts, full verifier дважды прошёл named bundle, redaction/kill criteria/independent SQLite replay — pass. Финальные correctness и POST/maintainability reviews: 0 blockers, 0 majors, 0 minors. Первая причинная петля доказана с target perspective.
+
+## Krypton goal package: переезд на Hermes Foundation
+
+- [x] Проверить полный pinned Hermes tree, Desktop, system-prompt и gateway lifecycle seams.
+- [x] Зафиксировать Hermes как foundation вместо ограниченного UI donor slice.
+- [x] Развести Hermes operational truth, Nox causal truth и каноничную маску.
+- [x] Описать безопасный full-tree import, rollback и единственный production cutover.
+- [x] Составить task board с file ownership, dependencies, verification и evidence lane.
+- [x] Провести Krypton PRE review без blocker, major и minor findings.
+- [x] Получить явное принятие PLAN hash Эйдзи; до этого Task 0 закрыт.
+- [ ] На Task 2 отдельно принять revision hash каноничной маски Nox.
+
+### Review
+
+Goal package создан в `docs/goals/nox-hermes-foundation-migration`. План переносит продукт на полный Hermes Agent `4281151ae859241351ba14d8c7682dc67ff4c126` / Desktop `0.17.0`, сохраняет Hermes agent/gateway/session/tool/memory loop и встраивает Nox через stable identity tier и observational causal bridge. Старый custom Desktop не переносится как fallback; доказанная TypeScript causal loop остаётся исследовательским модулем без второго production cortex. PRE verdict — `aligned`, blockers/majors/minors — `0/0/0`. Reviewed PLAN SHA-256: `F453963F6B002C9DA343E8A100FE429E66896AFC7BBAECC318955B4896B6D493`. Реализация не начиналась.
+
+### Execution acceptance
+
+- **Accepted at (UTC):** `2026-07-12T19:32:20.5743564Z`
+- **Accepted by:** Эйдзи через запуск persistent goal `Переезд Nox на Hermes Foundation`
+- **Plan path:** `docs/goals/nox-hermes-foundation-migration/PLAN.md`
+- **Accepted PLAN SHA-256:** `F453963F6B002C9DA343E8A100FE429E66896AFC7BBAECC318955B4896B6D493`
+- **Release:** Task 0 разрешён; интеграция маски остаётся закрытой до отдельного принятия Task 2 revision hash.
