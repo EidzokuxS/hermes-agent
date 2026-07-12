@@ -158,19 +158,20 @@ async function desktopProjection(page) {
   })
 }
 
-async function installDesktopObservations(page) {
-  await page.evaluate(() => {
+async function installDesktopObservations(page, entryOrdinal = 1) {
+  await page.evaluate(targetOrdinal => {
     const observations = []
     const sample = () => {
-      const delivery = [...document.querySelectorAll('.delivery')].at(-1)?.textContent?.trim()
-      const act = [...document.querySelectorAll('.act-line [data-slot="badge"]')].at(-1)?.textContent?.trim()
+      const entry = document.querySelectorAll('.causal-entry')[targetOrdinal - 1]
+      const delivery = entry?.querySelector('.delivery')?.textContent?.trim()
+      const act = entry?.querySelector('.act-line [data-slot="badge"]')?.textContent?.trim()
       for (const value of [delivery && `delivery:${delivery}`, act && `act:${act}`]) {
         if (value && observations.at(-1) !== value) observations.push(value)
       }
     }
     new MutationObserver(sample).observe(document.body, { childList: true, subtree: true, characterData: true })
     window.__noxObservations = observations
-  })
+  }, entryOrdinal)
 }
 
 async function deterministicDesktopFlow({ desktopDirectory, userData, temporary }) {
@@ -329,7 +330,7 @@ async function realDesktopFlow({ desktopDirectory, model, provider, temporary, u
   let secondPid
   let secondStatus
   try {
-    await installDesktopObservations(second.page)
+    await installDesktopObservations(second.page, 2)
     await second.page
       .getByLabel('Offer Nox a request')
       .fill(
