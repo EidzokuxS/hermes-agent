@@ -84,6 +84,12 @@ async function main(): Promise<void> {
     throw new Error(`Persisted Cortex model ${existing.state.cortex.modelId} does not match requested ${model.id}`)
   }
   const cortex = new PiCortex({
+    ...(process.env.NOX_PI_API_KEY === undefined
+      ? {}
+      : {
+          getApiKey: (requestedProvider: string) =>
+            requestedProvider === provider ? process.env.NOX_PI_API_KEY : undefined
+        }),
     model,
     onArtifact: async artifact => {
       await store.putAuditBlob({

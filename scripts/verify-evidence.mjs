@@ -134,15 +134,47 @@ for (const row of recovery.matrix) {
 }
 
 const rpc = await json(path.join(bundle, 'desktop/rpc-trace.json'))
-requireCondition(
-  rpc.journal?.eventRecordedSequence < rpc.journal?.eventAdmittedSequence &&
-    rpc.journal?.eventAdmittedSequence < rpc.journal?.actStartedSequence,
-  'RPC Journal order is not EventRecorded < EventAdmitted < ActStarted'
-)
-requireCondition(
-  JSON.stringify(rpc.observationOrder) === JSON.stringify(['receipt-frame-flushed', 'event.admitted', 'act.started']),
-  'RPC client observation order is invalid'
-)
+const rpcRequests = Array.isArray(rpc.requests) ? rpc.requests : [rpc]
+requireCondition(rpcRequests.length >= 1, 'RPC trace contains no requests')
+for (const request of rpcRequests) {
+  requireCondition(
+    request.journal?.eventRecordedSequence < request.journal?.eventAdmittedSequence &&
+      request.journal?.eventAdmittedSequence < request.journal?.actStartedSequence,
+    `${request.requestId ?? 'RPC'} order is not EventRecorded < EventAdmitted < ActStarted`
+  )
+  requireCondition(
+    JSON.stringify(request.observationOrder) ===
+      JSON.stringify(['receipt-frame-flushed', 'event.admitted', 'act.started']),
+    `${request.requestId ?? 'RPC'} client observation order is invalid`
+  )
+}
+
+if (expected.has('real-pi/real-pi-run.json')) {
+  const realRequired = [
+    'real-pi/causal-trace.json',
+    'real-pi/input-hashes.json',
+    'real-pi/nox.sqlite',
+    'real-pi/process-restart.json',
+    'real-pi/real-pi-run.json',
+    'real-pi/state-replay.json'
+  ]
+  for (const file of realRequired) requireCondition(expected.has(file), `Real Pi artifact is missing: ${file}`)
+  const realRun = await json(path.join(bundle, 'real-pi/real-pi-run.json'))
+  requireCondition(realRun.status === 'pass', 'Real Pi run did not pass')
+  requireCondition(realRun.attemptsPerAct === 1, 'Real Pi run used more than one provider attempt per Act')
+  requireCondition(Array.isArray(realRun.statuses) && realRun.statuses.length === 2, 'Real Pi terminals are incomplete')
+  const realTrace = await json(path.join(bundle, 'real-pi/causal-trace.json'))
+  const realRecords = (realTrace.records ?? []).map(record => journalRecordSchema.parse(record))
+  requireCondition(canonicalHash(realRecords) === realTrace.canonicalTraceHash, 'Real Pi causal trace hash mismatch')
+  const realReplay = await json(path.join(bundle, 'real-pi/state-replay.json'))
+  const realDatabase = verifyAuditDatabase(path.join(bundle, 'real-pi/nox.sqlite'), realReplay.finalStateVersion)
+  requireCondition(realDatabase.replay.finalStateHash === realReplay.finalStateHash, 'Real Pi database replay mismatch')
+  const realRestart = await json(path.join(bundle, 'real-pi/process-restart.json'))
+  requireCondition(realRestart.pidsDiffer === true, 'Real Pi runtime restart reused its PID')
+  const realInputs = await json(path.join(bundle, 'real-pi/input-hashes.json'))
+  requireCondition(realInputs.inputs?.length === 2, 'Real Pi run must retain exactly two CortexInput hashes')
+  requireCondition(rpcRequests.length === 2, 'Real Pi RPC trace must contain E1 and E2')
+}
 
 const killCriteria = await json(path.join(bundle, 'reviews/kill-criteria.json'))
 requireCondition(killCriteria.status === 'pass', 'Kill criteria report failed')
