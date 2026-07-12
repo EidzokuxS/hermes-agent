@@ -234,6 +234,21 @@ export function setRuntimeUnhealthy(message: string): void {
 }
 
 export function loadFixtureView(outcome = 'emitted'): void {
+  if (outcome === 'empty' || outcome === 'unhealthy') {
+    $noxView.set({
+      connected: outcome === 'empty',
+      connecting: false,
+      continuations: [],
+      ...(outcome === 'unhealthy' ? { error: 'The local runtime stopped unexpectedly.' } : {}),
+      items: [],
+      journalCursor: 0,
+      modelId: 'zai/glm-5.2',
+      runtimeUnhealthy: outcome === 'unhealthy',
+      stateHash: `sha256:${'0'.repeat(64)}`,
+      stateVersion: 0
+    })
+    return
+  }
   const now = Date.now()
   $noxView.set({
     connected: true,

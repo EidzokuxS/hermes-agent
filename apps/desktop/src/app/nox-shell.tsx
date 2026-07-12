@@ -61,7 +61,7 @@ export function NoxShell() {
           </span>
           <div>
             <h1>Nox</h1>
-            <p>Local agent</p>
+            <p>Autonomous local system</p>
           </div>
         </div>
         <div className={`runtime-presence${view.connected ? ' runtime-presence--live' : ''}`}>
@@ -79,49 +79,21 @@ export function NoxShell() {
           )}
           {view.items.length === 0 ? (
             <div className="empty-stage">
-              <div aria-hidden="true" className="presence-visual">
-                <span className="presence-orbit presence-orbit--outer" />
-                <span className="presence-orbit presence-orbit--inner" />
-                <strong>N</strong>
-                <i />
-              </div>
+              <span aria-hidden="true" className="empty-stage__icon codicon codicon-comment-discussion-sparkle" />
               <div className="empty-stage__copy">
                 <span>{view.modelId || 'Nox'}</span>
-                <h2>Start with a message</h2>
-                <p>Share context, ask a question, or leave an idea. Nox decides what to do with it.</p>
+                <h2>Message Nox</h2>
+                <p>Nox receives your message as input and decides whether to respond or act.</p>
               </div>
               <NoxComposer disabled={!view.connected} onSubmit={submit} variant="hero" />
-              <div aria-label="Possible outcomes" className="empty-capabilities">
-                <div>
-                  <span aria-hidden="true" className="codicon codicon-comment" />
-                  <p>
-                    <strong>Reply</strong>
-                    <small>Send a response</small>
-                  </p>
-                </div>
-                <div>
-                  <span aria-hidden="true" className="codicon codicon-save" />
-                  <p>
-                    <strong>Remember</strong>
-                    <small>Keep a durable change</small>
-                  </p>
-                </div>
-                <div>
-                  <span aria-hidden="true" className="codicon codicon-clock" />
-                  <p>
-                    <strong>Follow up</strong>
-                    <small>Return to it later</small>
-                  </p>
-                </div>
-              </div>
             </div>
           ) : (
             <>
               <div className="field-heading">
                 <div>
                   <span>Activity</span>
-                  <h2>Messages and actions</h2>
-                  <p>Everything Nox received, considered, and returned.</p>
+                  <h2>Messages and activity</h2>
+                  <p>Messages, responses, and background work in one place.</p>
                 </div>
                 <div className="activity-meta">
                   <span>{view.items.length === 1 ? '1 item' : `${view.items.length} items`}</span>
@@ -142,12 +114,12 @@ export function NoxShell() {
         </section>
         <aside className="causal-rail">
           <div className="rail-intro">
-            <span>System</span>
-            <h2>{view.connected ? 'Nox is ready' : runtimeLabel}</h2>
+            <span>System status</span>
+            <h2>{view.connected ? 'Ready' : runtimeLabel}</h2>
             <p>
               {view.connected
-                ? 'The local runtime is connected and can receive messages.'
-                : 'The local runtime is unavailable.'}
+                ? 'The local runtime can receive messages.'
+                : 'The local runtime is unavailable. Messages are paused.'}
             </p>
           </div>
           <dl className="system-summary">
@@ -175,34 +147,6 @@ export function NoxShell() {
               submit(`Cancel scheduled follow-up ${continuation.continuationId} (${continuation.seed.label}).`)
             }
           />
-          <div className="rail-legend">
-            <div className="rail-heading">
-              <h2>Status guide</h2>
-            </div>
-            <dl>
-              <div>
-                <dt>
-                  <i className="legend-dot legend-dot--delivered" />
-                  Received
-                </dt>
-                <dd>Saved locally</dd>
-              </div>
-              <div>
-                <dt>
-                  <i className="legend-dot legend-dot--active" />
-                  Working
-                </dt>
-                <dd>Nox is processing it</dd>
-              </div>
-              <div>
-                <dt>
-                  <i className="legend-dot" />
-                  Done · no reply
-                </dt>
-                <dd>Completed normally</dd>
-              </div>
-            </dl>
-          </div>
         </aside>
       </main>
     </div>

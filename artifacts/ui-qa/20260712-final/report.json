@@ -1,0 +1,242 @@
+{
+  "createdAt": "2026-07-12T14:38:52.668Z",
+  "references": [
+    {
+      "name": "Linear UI redesign",
+      "url": "https://linear.app/blog/how-we-redesigned-the-linear-ui"
+    },
+    {
+      "name": "Raycast AI",
+      "url": "https://www.raycast.com/core-features/ai"
+    },
+    {
+      "name": "LM Studio",
+      "url": "https://lmstudio.ai/"
+    },
+    {
+      "name": "Claude Cowork",
+      "url": "https://www.anthropic.com/product/claude-cowork"
+    }
+  ],
+  "scenarios": {
+    "emptyDesktop": {
+      "composer": {
+        "bottom": 626.703125,
+        "height": 100.5,
+        "right": 969.5,
+        "width": 820,
+        "x": 149.5,
+        "y": 526.203125
+      },
+      "field": {
+        "bottom": 881,
+        "height": 802,
+        "right": 1095,
+        "width": 1070,
+        "x": 25,
+        "y": 79
+      },
+      "overflow": {
+        "body": 0,
+        "page": 0
+      },
+      "rail": {
+        "bottom": 881,
+        "height": 802,
+        "right": 1415,
+        "width": 320,
+        "x": 1095,
+        "y": 79
+      },
+      "send": {
+        "bottom": 615.703125,
+        "height": 38,
+        "right": 958.5,
+        "width": 88,
+        "x": 870.5,
+        "y": 577.703125
+      },
+      "title": "Message Nox",
+      "viewport": {
+        "height": 900,
+        "width": 1440
+      },
+      "workspace": {
+        "bottom": 882,
+        "height": 804,
+        "right": 1416,
+        "width": 1392,
+        "x": 24,
+        "y": 78
+      }
+    },
+    "emptyCompact": {
+      "composer": {
+        "bottom": 396.53125,
+        "height": 100.5,
+        "right": 843,
+        "width": 786,
+        "x": 57,
+        "y": 296.03125
+      },
+      "overflow": 0,
+      "railDisplay": "none",
+      "viewport": {
+        "height": 700,
+        "width": 900
+      },
+      "workspace": {
+        "bottom": 682,
+        "height": 604,
+        "right": 876,
+        "width": 852,
+        "x": 24,
+        "y": 78
+      }
+    },
+    "lowHeight": {
+      "composer": {
+        "bottom": 396.53125,
+        "height": 100.5,
+        "right": 822,
+        "width": 765,
+        "x": 57,
+        "y": 296.03125
+      },
+      "overflow": 0,
+      "send": {
+        "bottom": 385.53125,
+        "height": 38,
+        "right": 811,
+        "width": 88,
+        "x": 723,
+        "y": 347.53125
+      },
+      "stage": {
+        "bottom": 601,
+        "height": 522,
+        "right": 822,
+        "width": 765,
+        "x": 57,
+        "y": 79
+      },
+      "stageOverflow": 0,
+      "viewport": {
+        "height": 620,
+        "width": 1200
+      },
+      "workspace": {
+        "bottom": 602,
+        "height": 524,
+        "right": 1176,
+        "width": 1152,
+        "x": 24,
+        "y": 78
+      }
+    },
+    "populatedDesktop": {
+      "composer": {
+        "bottom": 881,
+        "height": 163.5,
+        "right": 1094,
+        "width": 1069,
+        "x": 25,
+        "y": 717.5
+      },
+      "emission": {
+        "bottom": 424.828125,
+        "height": 80.59375,
+        "right": 991.5,
+        "width": 830,
+        "x": 161.5,
+        "y": 344.234375
+      },
+      "entry": {
+        "bottom": 442.828125,
+        "height": 219.484375,
+        "right": 1009.5,
+        "width": 866,
+        "x": 143.5,
+        "y": 223.34375
+      },
+      "overflow": 0,
+      "textarea": {
+        "bottom": 839,
+        "height": 84.5,
+        "right": 940,
+        "width": 859,
+        "x": 81,
+        "y": 754.5
+      },
+      "timeline": {
+        "bottom": 717.5,
+        "height": 499.15625,
+        "right": 1094,
+        "width": 1069,
+        "x": 25,
+        "y": 218.34375
+      }
+    },
+    "populatedCompact": {
+      "composer": {
+        "bottom": 681,
+        "height": 163.5,
+        "right": 875,
+        "width": 850,
+        "x": 25,
+        "y": 517.5
+      },
+      "entry": {
+        "bottom": 459.015625,
+        "height": 242.578125,
+        "right": 829,
+        "width": 734,
+        "x": 95,
+        "y": 216.4375
+      },
+      "heading": {
+        "bottom": 211.4375,
+        "height": 132.4375,
+        "right": 875,
+        "width": 850,
+        "x": 25,
+        "y": 79
+      },
+      "overflow": 0,
+      "railDisplay": "none",
+      "timeline": {
+        "bottom": 517.5,
+        "height": 306.0625,
+        "right": 875,
+        "width": 850,
+        "x": 25,
+        "y": 211.4375
+      }
+    },
+    "unhealthy": {
+      "alert": "The local runtime stopped unexpectedly.",
+      "buttonDisabled": true,
+      "overflow": 0,
+      "status": "Needs attention",
+      "textareaDisabled": true
+    },
+    "keyboard": {
+      "textareaCount": 1,
+      "focusAfterTab": {
+        "disabled": false,
+        "tag": "TEXTAREA",
+        "text": "Keyboard QA"
+      },
+      "shiftEnter": {
+        "buttonEnabled": true,
+        "focusTag": "TEXTAREA",
+        "value": "Keyboard QA\n"
+      }
+    },
+    "liveRuntime": {
+      "messageSent": true,
+      "responseObserved": "Acknowledged."
+    }
+  },
+  "consoleWarningsAndErrors": []
+}
