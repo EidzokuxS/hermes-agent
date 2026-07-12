@@ -2,6 +2,7 @@
 
 import type { StreamFn, ThinkingLevel } from '@earendil-works/pi-agent-core'
 import type { Api, Model } from '@earendil-works/pi-ai'
+import { builtinModels } from '@earendil-works/pi-ai/providers/all'
 
 export interface PiModelConfig {
   getApiKey?: (provider: string) => Promise<string | undefined> | string | undefined
@@ -21,4 +22,12 @@ export function resolvePiRunLimits(model: Model<Api>, requested: PiRunLimits): P
     maxOutputTokens: Math.min(requested.maxOutputTokens, model.maxTokens),
     timeoutMilliseconds: requested.timeoutMilliseconds
   }
+}
+
+export function resolveBuiltinPiModel(provider: string, modelId: string): Model<Api> {
+  const model = builtinModels().getModel(provider, modelId)
+  if (model === undefined) {
+    throw new Error(`Unknown pinned Pi model: ${provider}/${modelId}`)
+  }
+  return model
 }

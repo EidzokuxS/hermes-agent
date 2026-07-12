@@ -1,7 +1,7 @@
 /// <reference types="node" />
 
 import { canonicalHash, eventSchema, PROTOCOL_VERSION } from '@nox/protocol'
-import type { ActTerminal, Event, EventReceipt, JournalRecord, JournalRecordInput } from '@nox/protocol'
+import type { ActTerminal, Event, EventReceipt, JournalRecord, JournalRecordInput, StateSnapshot } from '@nox/protocol'
 
 import { ActRunner } from './act-runner.js'
 import type { ActiveActControl } from './act-runner.js'
@@ -203,6 +203,10 @@ export class NoxRuntime {
       }
       return records
     })
+  }
+
+  async snapshot(): Promise<StateSnapshot> {
+    return this.serialize(() => this.#store.loadSnapshot())
   }
 
   async waitForIdle(): Promise<void> {

@@ -1,4 +1,4 @@
-export { resolvePiRunLimits } from './model-config.js'
+export { resolveBuiltinPiModel, resolvePiRunLimits } from './model-config.js'
 export type { PiModelConfig, PiRunLimits } from './model-config.js'
 export { PiCortex } from './pi-cortex.js'
 export type { PiCortexOptions, PiOperationalArtifact, PiToolCallArtifact } from './pi-cortex.js'

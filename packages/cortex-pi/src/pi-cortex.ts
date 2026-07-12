@@ -17,6 +17,7 @@ export interface PiToolCallArtifact {
 }
 
 export interface PiOperationalArtifact {
+  actId: string
   diagnostics: string[]
   inputHash: string
   model: {
@@ -136,6 +137,7 @@ export class PiCortex {
     const artifact = async (): Promise<void> => {
       const proposalOutcome = recorder.outcome()
       await this.#options.onArtifact?.({
+        actId: input.actId,
         diagnostics,
         inputHash: canonicalHash(input),
         model: {

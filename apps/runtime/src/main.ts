@@ -1,1 +1,120 @@
-export {}
+/// <reference types="node" />
+
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
+import { PiCortex, resolveBuiltinPiModel } from '@nox/cortex-pi'
+import { canonicalHash, canonicalStringify, stateSnapshotSchema } from '@nox/protocol'
+import { createRuntime } from '@nox/runtime'
+import { SqliteStore } from '@nox/store-sqlite'
+
+import { createProcessHost } from './create-process-host.js'
+
+function argument(name: string): string {
+  const index = process.argv.indexOf(`--${name}`)
+  const value = index < 0 ? undefined : process.argv[index + 1]
+  if (value === undefined || value.startsWith('--')) {
+    throw new Error(`Missing --${name}`)
+  }
+  return value
+}
+
+async function main(): Promise<void> {
+  const dataDirectory = argument('data-dir')
+  const launchToken = argument('launch-token')
+  const interfaceOwnerId = argument('interface-owner')
+  const provider = argument('provider')
+  const modelId = argument('model')
+  const model = resolveBuiltinPiModel(provider, modelId)
+  const now = (): string => new Date().toISOString()
+  const store = new SqliteStore(join(dataDirectory, 'nox.sqlite'), { now })
+  const conceptText = readFileSync(join(process.cwd(), 'NOX-CONVERGENCE.md'), 'utf8')
+  const foundationState = {
+    cortex: {
+      adapter: 'pi' as const,
+      configHash: canonicalHash({ api: model.api, id: model.id, provider: model.provider }),
+      cortexId: 'pi-primary',
+      modelId: model.id,
+      packageVersion: '0.80.6' as const
+    },
+    identity: {
+      conceptDocument: 'NOX-CONVERGENCE.md' as const,
+      identityId: 'nox' as const,
+      revision: canonicalHash(conceptText)
+    },
+    openContinuations: [],
+    picture: {},
+    schemaVersions: { journal: 1 as const, protocol: 1 as const, state: 1 as const },
+    standingPolicies: [
+      {
+        adoptedAt: now(),
+        kind: 'attention.every-delivered-event' as const,
+        policyId: 'foundation-attention',
+        provenance: {
+          source: 'inherited' as const,
+          sourceDocument: 'NOX-CONVERGENCE.md' as const
+        },
+        status: 'active' as const,
+        version: 1 as const
+      }
+    ],
+    temporalAnchor: { lastObservedAt: now(), logicalTick: 0 },
+    workingField: {}
+  }
+  const initialSnapshot = stateSnapshotSchema.parse({
+    state: foundationState,
+    stateHash: canonicalHash(foundationState),
+    stateVersion: 0,
+    throughSequence: 0
+  })
+  let existing
+  try {
+    existing = await store.loadSnapshot()
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.includes('not been initialized')) {
+      throw error
+    }
+    existing = await store.initialize(initialSnapshot)
+  }
+  if (existing.state.cortex.modelId !== model.id) {
+    throw new Error(`Persisted Cortex model ${existing.state.cortex.modelId} does not match requested ${model.id}`)
+  }
+  const cortex = new PiCortex({
+    model,
+    onArtifact: async artifact => {
+      await store.putAuditBlob({
+        bytes: Uint8Array.from(Buffer.from(canonicalStringify(artifact), 'utf8')),
+        createdAt: now(),
+        mediaType: 'application/vnd.nox.pi-operational-artifact+json',
+        provenance: {
+          actId: artifact.actId,
+          cortexId: 'pi-primary',
+          kind: 'cortex',
+          modelId: model.id
+        }
+      })
+    }
+  })
+  let nextId = 0
+  const runtime = createRuntime({
+    clock: { now },
+    cortex,
+    idFactory: () => `runtime-${Date.now()}-${(nextId += 1)}`,
+    store
+  })
+  await runtime.recover()
+  const host = await createProcessHost({ interfaceOwnerId, launchToken, runtime })
+  process.stdout.write(`${JSON.stringify({ port: host.port, protocolVersion: 1 })}\n`)
+
+  const shutdown = async (): Promise<void> => {
+    await host.close()
+    store.close()
+  }
+  process.once('SIGINT', () => void shutdown().finally(() => process.exit(0)))
+  process.once('SIGTERM', () => void shutdown().finally(() => process.exit(0)))
+}
+
+void main().catch((error: unknown) => {
+  process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`)
+  process.exitCode = 1
+})
