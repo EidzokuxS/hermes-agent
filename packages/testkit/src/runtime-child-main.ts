@@ -138,17 +138,22 @@ type CreateProcessHost = (options: {
 }) => Promise<ProcessHost>
 
 async function loadProcessHost(): Promise<CreateProcessHost> {
-  const sourceUrl = new URL('../../../apps/runtime/src/create-process-host.ts', import.meta.url).href
-  const loaded = (await import(sourceUrl)) as { createProcessHost: CreateProcessHost }
+  const processHostUrl = new URL(
+    import.meta.url.endsWith('.ts')
+      ? '../../../apps/runtime/src/create-process-host.ts'
+      : '../../../apps/runtime/dist/create-process-host.js',
+    import.meta.url
+  ).href
+  const loaded = (await import(processHostUrl)) as { createProcessHost: CreateProcessHost }
   return loaded.createProcessHost
 }
 
 async function main(): Promise<void> {
   const dataDirectory = argument('data-dir')
-  const now = argument('now')
-  const phase = argument('phase', 'phase')
+  const now = argument('now', process.env.NOX_TEST_NOW ?? new Date().toISOString())
+  const phase = argument('phase', process.env.NOX_TEST_PHASE ?? 'phase')
   const boundary = argument('crash', 'none') as CrashBoundary
-  const scenario = argument('scenario', 'first-loop') as ScriptedScenario
+  const scenario = argument('scenario', process.env.NOX_TEST_SCENARIO ?? 'first-loop') as ScriptedScenario
   const clock = new DeterministicClock(now)
   let nextStoreId = 0
   const sqlite = new SqliteStore(join(dataDirectory, 'nox.sqlite'), {
@@ -176,7 +181,7 @@ async function main(): Promise<void> {
     store
   })
   await runtime.recover()
-  if (argument('fire-due', 'false') === 'true') {
+  if (argument('fire-due', process.env.NOX_TEST_FIRE_DUE ?? 'false') === 'true') {
     await runtime.fireDueContinuations()
   }
   const createProcessHost = await loadProcessHost()
@@ -195,7 +200,7 @@ async function main(): Promise<void> {
           }
         }),
     interfaceOwnerId: argument('interface-owner'),
-    launchToken: argument('launch-token'),
+    launchToken: argument('launch-token', process.env.NOX_LAUNCH_TOKEN),
     runtime
   })
   process.stdout.write(`${JSON.stringify({ pid: process.pid, port: host.port, protocolVersion: 1 })}\n`)

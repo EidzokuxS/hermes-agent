@@ -37,6 +37,13 @@ export default [
   {
     test: {
       include: ['test/**/*.test.ts'],
+      name: 'audit',
+      root: 'apps/audit'
+    }
+  },
+  {
+    test: {
+      include: ['test/**/*.test.ts'],
       name: 'desktop',
       root: 'apps/desktop'
     }

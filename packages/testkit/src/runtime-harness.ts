@@ -3,6 +3,7 @@
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { NoxRpcClient } from '@nox/interface-rpc'
 import { eventAppendResultSchema, PROTOCOL_VERSION, viewSnapshotSchema } from '@nox/protocol'
@@ -47,7 +48,8 @@ function parseAnnouncement(line: string): Announcement {
 
 export async function startRuntimeChild(options: StartRuntimeChildOptions): Promise<RuntimeChild> {
   const launchToken = randomUUID()
-  const entry = join(process.cwd(), 'packages/testkit/src/runtime-child-main.ts')
+  const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url))
+  const entry = join(repositoryRoot, 'packages/testkit/src/runtime-child-main.ts')
   const child = spawn(
     process.execPath,
     [
@@ -73,7 +75,7 @@ export async function startRuntimeChild(options: StartRuntimeChildOptions): Prom
       '--launch-token',
       launchToken
     ],
-    { cwd: process.cwd(), stdio: ['ignore', 'pipe', 'pipe'] }
+    { cwd: repositoryRoot, stdio: ['ignore', 'pipe', 'pipe'] }
   )
   let stderr = ''
   child.stderr.on('data', chunk => {
