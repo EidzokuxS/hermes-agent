@@ -1273,6 +1273,18 @@ function Install-SystemPackages {
 function Install-Repository {
     Write-Info "Installing to $InstallDir..."
 
+    # The managed checkout contains localized documentation paths that exceed
+    # MAX_PATH once nested under %LOCALAPPDATA% (and can be longer still when
+    # the caller is an MSIX-packaged desktop). Feed compatibility settings to
+    # every git process in this stage, including validity probes and clone.
+    $env:GIT_CONFIG_COUNT = "2"
+    $env:GIT_CONFIG_KEY_0 = "windows.appendAtomically"
+    $env:GIT_CONFIG_VALUE_0 = "false"
+    $env:GIT_CONFIG_KEY_1 = "core.longpaths"
+    $env:GIT_CONFIG_VALUE_1 = "true"
+    git config --global windows.appendAtomically false 2>$null
+    git config --global core.longpaths true 2>$null
+
     $didUpdate = $false
 
     if (Test-Path $InstallDir) {
@@ -1480,11 +1492,6 @@ function Install-Repository {
         # config lock files) due to antivirus, OneDrive, or NTFS filter drivers.
         # The -c flag injects config before any file I/O occurs.
         Write-Info "Configuring git for Windows compatibility..."
-        $env:GIT_CONFIG_COUNT = "1"
-        $env:GIT_CONFIG_KEY_0 = "windows.appendAtomically"
-        $env:GIT_CONFIG_VALUE_0 = "false"
-        git config --global windows.appendAtomically false 2>$null
-
         # Try SSH first, then HTTPS, with -c flag for atomic write fix
         Write-Info "Trying SSH clone..."
         $env:GIT_SSH_COMMAND = "ssh -o BatchMode=yes -o ConnectTimeout=5"
@@ -1512,13 +1519,13 @@ function Install-Repository {
                 # for.  GitHub supports archive URLs for commits, tags, and
                 # branches; we honour Commit > Tag > Branch.
                 if ($Commit) {
-                    $zipUrl = "https://github.com/NousResearch/hermes-agent/archive/$Commit.zip"
+                    $zipUrl = "https://github.com/EidzokuxS/hermes-agent/archive/$Commit.zip"
                     $zipLabel = $Commit
                 } elseif ($Tag) {
-                    $zipUrl = "https://github.com/NousResearch/hermes-agent/archive/refs/tags/$Tag.zip"
+                    $zipUrl = "https://github.com/EidzokuxS/hermes-agent/archive/refs/tags/$Tag.zip"
                     $zipLabel = $Tag
                 } else {
-                    $zipUrl = "https://github.com/NousResearch/hermes-agent/archive/refs/heads/$Branch.zip"
+                    $zipUrl = "https://github.com/EidzokuxS/hermes-agent/archive/refs/heads/$Branch.zip"
                     $zipLabel = $Branch
                 }
                 $zipPath = "$env:TEMP\hermes-agent-$zipLabel.zip"
@@ -1539,6 +1546,7 @@ function Install-Repository {
                     Push-Location $InstallDir
                     git -c windows.appendAtomically=false init 2>$null
                     git -c windows.appendAtomically=false config windows.appendAtomically false 2>$null
+                    git -c windows.appendAtomically=false config core.longpaths true 2>$null
                     git remote add origin $RepoUrlHttps 2>$null
                     Pop-Location
                     Write-Success "Git repo initialized for future updates"
@@ -1562,6 +1570,7 @@ function Install-Repository {
     # Set per-repo config (harmless if it fails)
     Push-Location $InstallDir
     git -c windows.appendAtomically=false config windows.appendAtomically false 2>$null
+    git -c windows.appendAtomically=false config core.longpaths true 2>$null
     # Pin autocrlf=false on the managed clone so git never renormalizes the
     # repo's LF text files to CRLF in the working tree. Without this, the very
     # next `hermes update` checkout aborts on a "dirty" tree the user never
@@ -1582,14 +1591,17 @@ function Install-Repository {
             if ($Commit) {
                 Write-Info "Pinning to commit $Commit..."
                 git -c windows.appendAtomically=false fetch origin $Commit
-                git -c windows.appendAtomically=false checkout --detach $Commit
+                # This branch runs only after a fresh clone or exact-ref ZIP
+                # extraction. Force is safe here and lets the ZIP fallback
+                # replace its untracked archive payload with the fetched tree.
+                git -c windows.appendAtomically=false checkout -f --detach $Commit
                 if ($LASTEXITCODE -ne 0) {
                     throw "git checkout $Commit failed (exit $LASTEXITCODE)"
                 }
             } elseif ($Tag) {
                 Write-Info "Pinning to tag $Tag..."
                 git -c windows.appendAtomically=false fetch origin "refs/tags/${Tag}:refs/tags/${Tag}"
-                git -c windows.appendAtomically=false checkout --detach "refs/tags/$Tag"
+                git -c windows.appendAtomically=false checkout -f --detach "refs/tags/$Tag"
                 if ($LASTEXITCODE -ne 0) {
                     throw "git checkout tag $Tag failed (exit $LASTEXITCODE)"
                 }

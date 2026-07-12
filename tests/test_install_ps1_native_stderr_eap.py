@@ -47,6 +47,25 @@ def test_repository_stage_relieves_eap_for_ssh_and_https_git_clone() -> None:
     )
 
 
+def test_repository_stage_enables_long_paths_before_repo_probes_and_clone() -> None:
+    text = _install_ps1()
+    function_start = text.index("function Install-Repository")
+    longpaths_env = text.index('$env:GIT_CONFIG_KEY_1 = "core.longpaths"', function_start)
+    first_repo_probe = text.index("rev-parse --is-inside-work-tree", function_start)
+    first_clone = text.index("clone --depth 1 --branch", function_start)
+
+    assert longpaths_env < first_repo_probe < first_clone
+    assert '$env:GIT_CONFIG_VALUE_1 = "true"' in text[longpaths_env:first_repo_probe]
+    assert "git config --global core.longpaths true" in text[longpaths_env:first_repo_probe]
+    assert "git -c windows.appendAtomically=false config core.longpaths true" in text
+
+
+def test_fresh_zip_fallback_can_replace_archive_payload_with_pinned_tree() -> None:
+    text = _install_ps1()
+    assert "https://github.com/EidzokuxS/hermes-agent/archive/$Commit.zip" in text
+    assert "git -c windows.appendAtomically=false checkout -f --detach $Commit" in text
+
+
 def test_uv_venv_and_dependency_installs_relax_eap() -> None:
     text = _install_ps1()
     _assert_relaxed_call(text, r"& \$UvCmd venv venv --python \$PythonVersion")

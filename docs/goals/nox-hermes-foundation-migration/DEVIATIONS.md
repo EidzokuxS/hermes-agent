@@ -45,3 +45,12 @@
 - **Decision:** Keep `NousResearch/hermes-agent@4281151…` as the immutable donor source, synchronize the fork's `main` to upstream by fast-forward, and make `EidzokuxS/hermes-agent` the canonical `origin`, install-script source and update remote for Nox-owned commits. Migration work remains on `migration/hermes-foundation`; upstream `main` is not mixed into the pinned migration branch.
 - **Why this preserves intent:** Full Hermes provenance remains auditable while packaged Nox commits can retrieve the exact installer script committed with their own build.
 - **Rollback:** Point bootstrap and update constants back to a different Nox-owned repository only after that repository contains every packaged build commit and its matching installer scripts.
+
+## D-006 — Windows managed checkout enables Git long-path support
+
+- **Recorded:** 2026-07-12
+- **Plan location:** Task 0, packaged Desktop bootstrap proof.
+- **Evidence:** The fork-backed installer downloaded the correct `1799b3e…` script and commit, but Git checkout failed on the localized documentation path `website/i18n/zh-Hans/.../software-development-hermes-agent-skill-authoring.md` with `Filename too long`. The ZIP fallback then initialized a repository over extracted untracked files and could not replace them with the fetched pinned tree.
+- **Decision:** Inject `core.longpaths=true` into every Git invocation before repository probes or clone, persist it globally and per managed checkout, use the Nox fork for ZIP archives, and force only the post-download checkout path that operates on a fresh clone/ZIP payload. The existing-install update path remains non-destructive and keeps its stash/restore contract.
+- **Why this preserves intent:** Hermes' complete source tree remains installable under the real Windows `%LOCALAPPDATA%` depth without dropping localized files or weakening the managed-update data-preservation path.
+- **Rollback:** Remove the compatibility setting only if the full upstream tree no longer exceeds Windows path limits at every supported install root; retain the fresh ZIP checkout distinction.
