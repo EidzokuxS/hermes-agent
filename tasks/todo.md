@@ -121,7 +121,7 @@ Goal package создан в `docs/goals/nox-first-causal-loop`. Старый RP
 ## Execution: первая причинная петля
 
 - [x] Task 0 — bootstrap, dependency lock and provenance.
-- [ ] Task 1 — versioned causal protocol.
+- [x] Task 1 — versioned causal protocol.
 - [ ] Task 2 — SQLite Journal, snapshots and independent reader.
 - [ ] Task 3 — deterministic State transition and input assembly.
 - [ ] Task 4 — Pi CortexPort and proposal fence.
@@ -136,3 +136,5 @@ Goal package создан в `docs/goals/nox-first-causal-loop`. Старый RP
 ### Execution review
 
 Task 0 завершён после hash-bound acceptance. Exact Node/npm и dependency pins, чистый `npm ci`, lint, typecheck, empty workspace test baseline, renderer build, security audit и donor provenance записаны в `docs/upstream/TASK0-BASELINE.md`. Pi и Hermes commits fetched напрямую; все 22 Hermes allowlist blob SHA совпали. Root manifests и `package-lock.json` теперь заморожены для последующих задач.
+
+Task 1 завершён единым `@nox/protocol`: шесть versioned primitives, strict runtime schemas, causal/provenance envelopes, explicit external admission, bounded single-fire Continuation, Effect-only State authority, terminal/version rules, domain-only interface vocabulary и deterministic canonical SHA-256. Golden fixtures, rejection matrix и cross-process hash transcript записаны в `docs/architecture/protocol-v1-evidence.md`; 12 focused tests, package build/typecheck и root lint/test/typecheck прошли.

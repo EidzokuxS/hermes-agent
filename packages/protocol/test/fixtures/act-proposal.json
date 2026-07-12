@@ -1,0 +1,19 @@
+{
+  "effects": [
+    {
+      "content": "Я здесь.",
+      "format": "text",
+      "kind": "emission.append",
+      "protocolVersion": 1
+    },
+    {
+      "kind": "state.patch",
+      "operation": "add",
+      "path": "/workingField/currentContact",
+      "protocolVersion": 1,
+      "value": "eiji-local"
+    }
+  ],
+  "protocolVersion": 1,
+  "settlement": "effects"
+}
