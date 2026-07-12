@@ -1,0 +1,32 @@
+{
+  "name": "@nox/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "productName": "Nox",
+  "description": "Nox causal runtime desktop surface.",
+  "type": "module",
+  "main": "dist/electron/main.js",
+  "scripts": {
+    "build": "npm run build:renderer && tsc -p tsconfig.electron.json",
+    "build:renderer": "vite build",
+    "dev:renderer": "vite --host 127.0.0.1 --port 5174",
+    "start": "npm run build && electron .",
+    "test": "vitest run --root . --environment jsdom --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit"
+  },
+  "dependencies": {
+    "@nanostores/react": "1.1.0",
+    "@nox/interface-rpc": "0.0.0",
+    "@nox/protocol": "0.0.0",
+    "@tailwindcss/vite": "4.2.4",
+    "@vscode/codicons": "0.0.45",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
+    "nanostores": "1.3.0",
+    "radix-ui": "1.6.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "tailwind-merge": "3.6.0",
+    "tailwindcss": "4.2.4"
+  }
+}

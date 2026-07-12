@@ -1,0 +1,10 @@
+node_modules/
+dist/
+release/
+coverage/
+.tools/
+artifacts/
+REFERENCE ONLY/
+NOX-RETHINK.md
+*.md
+package-lock.json

@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist/electron",
+    "rootDir": "electron",
+    "tsBuildInfoFile": "dist/electron.tsbuildinfo"
+  },
+  "include": ["electron/**/*.ts"],
+  "references": [{ "path": "../../packages/protocol" }, { "path": "../../packages/interface-rpc" }]
+}

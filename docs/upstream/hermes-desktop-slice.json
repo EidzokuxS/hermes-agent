@@ -1,0 +1,179 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "commit": "4281151ae859241351ba14d8c7682dc67ff4c126",
+    "desktopVersion": "0.17.0",
+    "license": "MIT"
+  },
+  "policy": {
+    "default": "exclude",
+    "targetRoot": "apps/desktop",
+    "brandAssets": "exclude",
+    "domainSemantics": "exclude"
+  },
+  "files": [
+    {
+      "source": "apps/desktop/src/lib/utils.ts",
+      "target": "apps/desktop/src/lib/utils.ts",
+      "blobSha": "d32b0fe652e3a7129dd9a4a2fb82bfbb6faad449",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/src/components/ui/alert.tsx",
+      "target": "apps/desktop/src/components/ui/alert.tsx",
+      "blobSha": "d8d8004df2b908c5592dd02072b5f21db74346a2",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/src/components/ui/badge.tsx",
+      "target": "apps/desktop/src/components/ui/badge.tsx",
+      "blobSha": "6f286c3fde7dd7871d998351910b24c2e3b2e17d",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/src/components/ui/button.tsx",
+      "target": "apps/desktop/src/components/ui/button.tsx",
+      "blobSha": "10a107727a5113027d40b13252febedfef071a50",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/src/components/ui/control.ts",
+      "target": "apps/desktop/src/components/ui/control.ts",
+      "blobSha": "473d43700b7b2d083d99640afc123b8610c98172",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/src/components/ui/input.tsx",
+      "target": "apps/desktop/src/components/ui/input.tsx",
+      "blobSha": "a195e9a9ab84b71f9944ee2d6edb229ccc72f0f0",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/src/components/ui/textarea.tsx",
+      "target": "apps/desktop/src/components/ui/textarea.tsx",
+      "blobSha": "432d91d05a3c99d6cff71493a3de6c20ac9eb594",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/src/components/ui/scroll-area.tsx",
+      "target": "apps/desktop/src/components/ui/scroll-area.tsx",
+      "blobSha": "58b9ff0eaff344d4a2c428809c932e1da1934a97",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/src/components/ui/separator.tsx",
+      "target": "apps/desktop/src/components/ui/separator.tsx",
+      "blobSha": "ea5dc859a654974a5895275d89a34aefddb32b7e",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/src/components/ui/skeleton.tsx",
+      "target": "apps/desktop/src/components/ui/skeleton.tsx",
+      "blobSha": "a4b3e1d1452100d4cd18d0a8e12f8bd38e476d65",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/src/components/ui/tabs.tsx",
+      "target": "apps/desktop/src/components/ui/tabs.tsx",
+      "blobSha": "ff6924b78aa50d0144f9655f9ac5ecfed7fe1ef1",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/src/components/ui/tooltip.tsx",
+      "target": "apps/desktop/src/components/ui/tooltip.tsx",
+      "blobSha": "d10535858690b8ef15021b93595858fc1c75b51d",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/src/components/ui/popover.tsx",
+      "target": "apps/desktop/src/components/ui/popover.tsx",
+      "blobSha": "f7bd2b750b683b81f67982e41068a6990acd80f6",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/src/themes/color.ts",
+      "target": "apps/desktop/src/themes/color.ts",
+      "blobSha": "799200deb366461d3572a60f84d99203e95e5120",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/src/themes/types.ts",
+      "target": "apps/desktop/src/themes/types.ts",
+      "blobSha": "3aefda3eaa3c6f994ee356c6f1eb807cc924adea",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/src/components/assistant-ui/thread/content.ts",
+      "target": "apps/desktop/src/components/assistant-ui/thread/content.ts",
+      "blobSha": "7f7d9bedd4c2c0ebfecb6eab53d796cc175131be",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/src/components/assistant-ui/thread/timeline-data.ts",
+      "target": "apps/desktop/src/components/assistant-ui/thread/timeline-data.ts",
+      "blobSha": "e52d1d7c780af249a27c62856f5d351c464efdbc",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/src/components/assistant-ui/thread/timestamp.ts",
+      "target": "apps/desktop/src/components/assistant-ui/thread/timestamp.ts",
+      "blobSha": "f2b0689dd6ea055e2c8fed598eab6ce71e48c1dd",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/src/components/assistant-ui/thread/types.ts",
+      "target": "apps/desktop/src/components/assistant-ui/thread/types.ts",
+      "blobSha": "0add8b5f8c45f2e95ecc19ca3c66914ba7c08c1d",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/src/lib/time.ts",
+      "target": "apps/desktop/src/lib/time.ts",
+      "blobSha": "e26666c15db0e732b465def9cd01d673ceeb0119",
+      "mode": "copy-and-adapt"
+    },
+    {
+      "source": "apps/desktop/electron/window-state.ts",
+      "target": "apps/desktop/electron/window-state.ts",
+      "blobSha": "d443c6aaf183d24e41d15d7ffd9cae41069e3f07",
+      "mode": "copy-and-adapt"
+    }
+  ],
+  "patternPorts": [
+    {
+      "source": "apps/desktop/electron/hardening.ts",
+      "target": "apps/desktop/electron/hardening.ts",
+      "blobSha": "5fb113229b38738f6a1b276a8523e961fef16347",
+      "mode": "nox-owned-pattern-port",
+      "allowedSymbols": [
+        "resolveTimeoutMs",
+        "sensitiveFileBlockReason",
+        "ipcPathError",
+        "rejectUnsafePathSyntax",
+        "resolveRequestedPathForIpc",
+        "statForIpc",
+        "realpathForIpc",
+        "rejectSensitiveFilePath",
+        "resolveDirectoryForIpc",
+        "resolveReadableFileForIpc"
+      ],
+      "forbiddenSymbols": ["encryptDesktopSecret"]
+    }
+  ],
+  "excludedRoots": [
+    "agent/",
+    "gateway/",
+    "hermes_cli/",
+    "tui_gateway/",
+    "ui-tui/",
+    "providers/",
+    "tools/",
+    "skills/",
+    "apps/desktop/src/app/",
+    "apps/desktop/src/store/",
+    "apps/desktop/src/i18n/",
+    "apps/desktop/public/",
+    "apps/desktop/assets/"
+  ]
+}

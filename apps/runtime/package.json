@@ -1,0 +1,19 @@
+{
+  "name": "@nox/runtime-app",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "test": "vitest run --root . --passWithNoTests",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@nox/cortex-pi": "0.0.0",
+    "@nox/interface-rpc": "0.0.0",
+    "@nox/protocol": "0.0.0",
+    "@nox/runtime": "0.0.0",
+    "@nox/store-sqlite": "0.0.0"
+  }
+}
