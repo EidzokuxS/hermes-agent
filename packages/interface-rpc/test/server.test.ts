@@ -216,13 +216,36 @@ describe('ordered RPC session', () => {
     const runtime = new FakeRuntime()
     runtime.journalRecords = [
       record(1, { eventId: 'event-001', kind: 'event.admitted' }),
-      record(2, { kind: 'state.advanced', stateHash: `sha256:${'f'.repeat(64)}`, stateVersion: 1 })
+      record(2, { kind: 'state.advanced', stateHash: `sha256:${'f'.repeat(64)}`, stateVersion: 1 }),
+      record(3, {
+        decision: {
+          actId: 'act-001',
+          decidedAt: at,
+          decision: 'accepted',
+          effect: {
+            kind: 'continuation.schedule',
+            protocolVersion: 1,
+            seed: {
+              due: { at: '2026-07-12T09:00:00.000Z', kind: 'at-time' },
+              instruction: 'Re-enter once.',
+              label: 'C1',
+              maxFireCount: 1,
+              protocolVersion: 1
+            }
+          },
+          effectId: 'effect-c1',
+          ordinal: 0,
+          provenance: { component: 'rpc-test', kind: 'runtime' },
+          stateChanging: true
+        },
+        kind: 'effect.decision'
+      })
     ]
     const connection = new TestConnection(runtime.order)
     await new RpcSession({ connection, interfaceOwnerId: 'eiji-local', runtime }).handleText(
       request('journal.subscribe', { afterSequence: 0, protocolVersion: 1 })
     )
-    expect(connection.frames).toHaveLength(3)
+    expect(connection.frames).toHaveLength(4)
     expect(parseRpcResponse(connection.frames[1]!)).toMatchObject({
       method: 'nox.event',
       params: { journalSequence: 1, kind: 'event.admitted' }
@@ -230,6 +253,14 @@ describe('ordered RPC session', () => {
     expect(parseRpcResponse(connection.frames[2]!)).toMatchObject({
       method: 'nox.event',
       params: { journalSequence: 2, kind: 'state.advanced' }
+    })
+    expect(parseRpcResponse(connection.frames[3]!)).toMatchObject({
+      method: 'nox.event',
+      params: {
+        continuation: { originActId: 'act-001', seed: { label: 'C1' }, status: 'open' },
+        journalSequence: 3,
+        kind: 'continuation.changed'
+      }
     })
   })
 })

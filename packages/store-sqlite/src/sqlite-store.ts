@@ -37,6 +37,7 @@ export interface JournalQuery {
   afterSequence?: number
   kinds?: string[]
   limit?: number
+  order?: 'ascending' | 'descending'
 }
 
 export interface SqliteStoreOptions {
@@ -173,6 +174,7 @@ export class SqliteStore {
     const afterSequence = query.afterSequence ?? 0
     const limit = Math.min(Math.max(query.limit ?? 1_000, 1), 10_000)
     const kinds = query.kinds ?? []
+    const order = query.order === 'descending' ? 'DESC' : 'ASC'
     const kindClause = kinds.length === 0 ? '' : `AND entry_kind IN (${kinds.map(() => '?').join(', ')})`
     const rows = this.#database
       .prepare(
@@ -180,7 +182,7 @@ export class SqliteStore {
                 journal_schema_version, recorded_at, entry_json, provenance_json, causal_json
          FROM journal_records
          WHERE sequence > ? ${kindClause}
-         ORDER BY sequence
+         ORDER BY sequence ${order}
          LIMIT ?`
       )
       .all(afterSequence, ...kinds, limit) as unknown as JournalRow[]

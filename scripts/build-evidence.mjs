@@ -1,11 +1,14 @@
+/* global document, MutationObserver, window */
+
 import { createHash } from 'node:crypto'
 import { copyFile, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { spawn, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 
 import { checkKillCriteria } from './check-kill-criteria.mjs'
+import { scanEvidenceFiles } from './evidence-secret-scan.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -59,109 +62,15 @@ const realPiRequested = process.argv.includes('--real-pi')
 const npmCli = process.env.npm_execpath
 const npmCommand = npmCli ? process.execPath : process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const npmPrefix = npmCli ? [npmCli] : []
+commands.push(run(npmCommand, [...npmPrefix, 'run', 'node:check']))
 commands.push(run(npmCommand, [...npmPrefix, 'run', 'build']))
 commands.push(run(npmCommand, [...npmPrefix, 'run', 'test:foundation']))
 commands.push(run(npmCommand, [...npmPrefix, 'run', 'test', '--workspace', '@nox/audit']))
-const { canonicalHash, eventAppendResultSchema, PROTOCOL_VERSION, viewSnapshotSchema } = await import('@nox/protocol')
-const { NoxRpcClient } = await import('@nox/interface-rpc')
+const { canonicalHash } = await import('@nox/protocol')
 const { SqliteAuditReader, SqliteStore } = await import('@nox/store-sqlite')
-const { startRuntimeChild } = await import('@nox/testkit')
 const { verifyAuditDatabase } = await import(pathToFileURL(path.join(root, 'apps/audit/dist/verify.js')).href)
 
-async function startProductionRuntime({ dataDirectory, interfaceOwnerId, launchToken, model, provider }) {
-  const child = spawn(
-    process.execPath,
-    [
-      path.join(root, 'apps/runtime/dist/main.js'),
-      '--data-dir',
-      dataDirectory,
-      '--launch-token',
-      launchToken,
-      '--interface-owner',
-      interfaceOwnerId,
-      '--provider',
-      provider,
-      '--model',
-      model
-    ],
-    {
-      cwd: root,
-      env: { ...process.env, NOX_PI_API_KEY: process.env.NOX_PI_API_KEY },
-      stdio: ['ignore', 'pipe', 'pipe']
-    }
-  )
-  let stderr = ''
-  child.stderr.on('data', chunk => {
-    stderr = `${stderr}${String(chunk)}`.slice(-16_384)
-  })
-  const announcement = await new Promise((resolve, reject) => {
-    let stdout = ''
-    const onExit = code => reject(new Error(`Production runtime exited before ready (${code}): ${stderr}`))
-    child.once('exit', onExit)
-    child.stdout.on('data', chunk => {
-      stdout += String(chunk)
-      const newline = stdout.indexOf('\n')
-      if (newline < 0) return
-      child.off('exit', onExit)
-      try {
-        const parsed = JSON.parse(stdout.slice(0, newline))
-        if (parsed.protocolVersion !== 1 || typeof parsed.port !== 'number') throw new Error('invalid announcement')
-        resolve(parsed)
-      } catch (error) {
-        reject(error)
-      }
-    })
-    child.once('error', reject)
-  })
-  const client = new NoxRpcClient({ launchToken, url: `ws://127.0.0.1:${announcement.port}` })
-  await client.ready()
-  const waitForExit = () =>
-    new Promise(resolve => {
-      if (child.exitCode !== null || child.signalCode !== null)
-        resolve({ code: child.exitCode, signal: child.signalCode })
-      else child.once('exit', (code, signal) => resolve({ code, signal }))
-    })
-  const snapshot = async () =>
-    viewSnapshotSchema.parse(
-      await client.call({ method: 'view.snapshot', params: { protocolVersion: PROTOCOL_VERSION } })
-    )
-  return {
-    append: async (clientEventId, content) =>
-      eventAppendResultSchema.parse(
-        await client.call({
-          method: 'event.append',
-          params: { clientEventId, content: { content, format: 'text', kind: 'message' }, protocolVersion: 1 }
-        })
-      ).receipt,
-    close: async () => {
-      await client.close().catch(() => undefined)
-      if (child.exitCode === null && child.signalCode === null) child.kill('SIGTERM')
-      return waitForExit()
-    },
-    forceTerminate: async () => {
-      await client.close().catch(() => undefined)
-      if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
-      return waitForExit()
-    },
-    pid: child.pid,
-    snapshot,
-    waitForSnapshot: async (predicate, timeoutMilliseconds = 180_000) => {
-      const deadline = Date.now() + timeoutMilliseconds
-      while (Date.now() < deadline) {
-        const view = await snapshot()
-        if (predicate(view)) return view
-        await new Promise(resolve => setTimeout(resolve, 100))
-      }
-      throw new Error(`Timed out waiting for real Pi runtime: ${stderr}`)
-    }
-  }
-}
-
-function terminalSucceeded(terminal) {
-  return terminal?.status === 'completed-effects' || terminal?.status === 'completed-silent'
-}
-
-function rpcTraceFor(records, receipt, requestId) {
+function rpcTraceFor(records, receipt, requestId, rawObservations) {
   const recorded = recordFor(
     records,
     record => record.entry.kind === 'event.recorded' && record.entry.event.eventId === receipt.eventId,
@@ -185,32 +94,276 @@ function rpcTraceFor(records, receipt, requestId) {
       eventAdmittedSequence: admitted.sequence,
       eventRecordedSequence: recorded.sequence
     },
-    observationOrder: ['receipt-frame-flushed', 'event.admitted', 'act.started'],
+    observationOrder: requireObservedDeliveryOrder(rawObservations, requestId),
+    rawObservations,
     receipt,
     requestId
   }
 }
 
-async function captureDesktop({ databasePath, environment, screenshotPaths, stateVersion, userData }) {
-  await mkdir(path.join(userData, 'runtime'), { recursive: true })
-  await copyFile(databasePath, path.join(userData, 'runtime/nox.sqlite'))
+async function launchDeterministicDesktop({ fireDue, now, phase, pidFile, userData }) {
   const { _electron: electron } = await import('playwright')
-  let electronApp
+  const electronApp = await electron.launch({
+    args: ['apps/desktop'],
+    cwd: root,
+    env: {
+      ...process.env,
+      NOX_DESKTOP_USER_DATA: userData,
+      NOX_RUNTIME_ENTRY: path.join(root, 'packages/testkit/dist/runtime-child-main.js'),
+      NOX_TEST_FIRE_DUE: String(fireDue),
+      NOX_TEST_NOW: now,
+      NOX_TEST_PHASE: phase,
+      NOX_TEST_PID_FILE: pidFile,
+      NOX_TEST_SCENARIO: 'first-loop'
+    }
+  })
+  const page = await electronApp.firstWindow()
+  await page.waitForSelector('text=runtime present', { timeout: 15_000 })
+  return { electronApp, page }
+}
+
+async function readRuntimePid(pidFile) {
+  const pid = Number(await readFile(pidFile, 'utf8'))
+  if (!Number.isInteger(pid) || pid <= 0) throw new Error(`Invalid runtime PID: ${pid}`)
+  return pid
+}
+
+async function waitForProcessExit(pid) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    try {
+      process.kill(pid, 0)
+    } catch {
+      return
+    }
+    await new Promise(resolve => setTimeout(resolve, 25))
+  }
+  throw new Error(`Runtime process ${pid} remained alive after SIGKILL`)
+}
+
+async function desktopProjection(page) {
+  return page.evaluate(() => {
+    const version = Number(document.querySelector('.state-version strong')?.textContent?.replace(/^v/, ''))
+    const cursorText = document.querySelector('.field-heading code')?.textContent ?? ''
+    const journalCursor = Number(/cursor\s+(\d+)/.exec(cursorText)?.[1])
+    if (!Number.isInteger(version) || !Number.isInteger(journalCursor)) {
+      throw new Error('Desktop projection did not expose a valid State version and Journal cursor')
+    }
+    return {
+      continuations: [...document.querySelectorAll('.continuations li strong')].map(item => item.textContent?.trim()),
+      emissions: [...document.querySelectorAll('.emission p')].map(item => item.textContent?.trim()),
+      journalCursor,
+      requests: [...document.querySelectorAll('.request-content')].map(item => item.textContent?.trim()),
+      stateVersion: version
+    }
+  })
+}
+
+async function installDesktopObservations(page) {
+  await page.evaluate(() => {
+    const observations = []
+    const sample = () => {
+      const delivery = [...document.querySelectorAll('.delivery')].at(-1)?.textContent?.trim()
+      const act = [...document.querySelectorAll('.act-line [data-slot="badge"]')].at(-1)?.textContent?.trim()
+      for (const value of [delivery && `delivery:${delivery}`, act && `act:${act}`]) {
+        if (value && observations.at(-1) !== value) observations.push(value)
+      }
+    }
+    new MutationObserver(sample).observe(document.body, { childList: true, subtree: true, characterData: true })
+    window.__noxObservations = observations
+  })
+}
+
+async function deterministicDesktopFlow({ desktopDirectory, userData, temporary }) {
+  const firstPidFile = path.join(temporary, 'desktop-runtime-p1.pid')
+  const secondPidFile = path.join(temporary, 'desktop-runtime-p2.pid')
+  const first = await launchDeterministicDesktop({
+    fireDue: false,
+    now: '2026-07-12T10:00:00.000Z',
+    phase: 'evidence-desktop-p1',
+    pidFile: firstPidFile,
+    userData
+  })
+  let firstPid
+  let beforeRestart
+  let observations
+  let observationOrder
   try {
-    electronApp = await electron.launch({
-      args: ['apps/desktop'],
-      cwd: root,
-      env: { ...process.env, ...environment, NOX_DESKTOP_USER_DATA: userData }
-    })
-    const page = await electronApp.firstWindow()
-    await page.waitForSelector('text=runtime present', { timeout: 15_000 })
-    await page
-      .locator('.state-version strong')
-      .filter({ hasText: `v${stateVersion}` })
-      .waitFor({ timeout: 15_000 })
-    for (const screenshotPath of screenshotPaths) await page.screenshot({ path: screenshotPath })
+    await installDesktopObservations(first.page)
+    await first.page.getByLabel('Offer Nox a request').fill('Please consider this Event, Nox.')
+    await first.page.getByRole('button', { name: 'Deliver' }).click()
+    await first.page.getByText('E1 was accepted and C1 was planted.').waitFor({ timeout: 15_000 })
+    await first.page.locator('.state-version strong').filter({ hasText: 'v1' }).waitFor({ timeout: 15_000 })
+    await first.page.locator('.continuations li').waitFor({ timeout: 15_000 })
+    observations = await first.page.evaluate(() => window.__noxObservations)
+    observationOrder = requireObservedDeliveryOrder(observations, 'Deterministic Desktop Act')
+    beforeRestart = await desktopProjection(first.page)
+    await first.page.screenshot({ path: path.join(desktopDirectory, 'before-restart.png') })
+    firstPid = await readRuntimePid(firstPidFile)
+    process.kill(firstPid, 'SIGKILL')
+    await waitForProcessExit(firstPid)
   } finally {
-    await electronApp?.close()
+    await first.electronApp.close()
+  }
+
+  const second = await launchDeterministicDesktop({
+    fireDue: true,
+    now: '2026-07-12T10:06:00.000Z',
+    phase: 'evidence-desktop-p2',
+    pidFile: secondPidFile,
+    userData
+  })
+  let afterRestart
+  let secondPid
+  try {
+    await second.page.locator('.state-version strong').filter({ hasText: 'v3' }).waitFor({ timeout: 15_000 })
+    await second.page.getByText('E1 was accepted and C1 was planted.').waitFor({ timeout: 15_000 })
+    await second.page.getByText('C1 returned through a fresh runtime process.').waitFor({ timeout: 15_000 })
+    afterRestart = await desktopProjection(second.page)
+    secondPid = await readRuntimePid(secondPidFile)
+    await second.page.screenshot({ path: path.join(desktopDirectory, 'after-restart.png') })
+    await second.page
+      .locator('.emission')
+      .last()
+      .screenshot({ path: path.join(desktopDirectory, 'silent-or-emitted.png') })
+  } finally {
+    await second.electronApp.close()
+  }
+
+  return {
+    afterRestart,
+    beforeRestart,
+    firstPid,
+    observationOrder,
+    rawObservations: observations,
+    secondPid,
+    termination: { code: null, observedExited: true, signal: 'SIGKILL' }
+  }
+}
+
+function requireObservedDeliveryOrder(observations, label) {
+  const delivered = observations.indexOf('delivery:delivered')
+  const admitted = observations.indexOf('delivery:admitted')
+  const thinking = observations.indexOf('act:thinking')
+  if (!(delivered >= 0 && admitted > delivered && thinking > admitted)) {
+    throw new Error(`${label} did not observe receipt -> admission -> Act order: ${JSON.stringify(observations)}`)
+  }
+  return ['receipt-frame-flushed', 'event.admitted', 'act.started']
+}
+
+async function launchRealDesktop({ model, pidFile, provider, userData }) {
+  const { _electron: electron } = await import('playwright')
+  const electronApp = await electron.launch({
+    args: ['apps/desktop'],
+    cwd: root,
+    env: {
+      ...process.env,
+      NOX_DESKTOP_RUNTIME_PID_FILE: pidFile,
+      NOX_DESKTOP_USER_DATA: userData,
+      NOX_PI_API_KEY: process.env.NOX_PI_API_KEY,
+      NOX_PI_MODEL: model,
+      NOX_PI_PROVIDER: provider
+    }
+  })
+  const page = await electronApp.firstWindow()
+  await page.waitForSelector('text=runtime present', { timeout: 15_000 })
+  return { electronApp, page }
+}
+
+async function waitForRealTerminal(page, ordinal) {
+  await page.waitForFunction(
+    expectedOrdinal => {
+      const entries = [...document.querySelectorAll('.causal-entry')]
+      const label = entries[expectedOrdinal - 1]?.querySelector('.act-line [data-slot="badge"]')?.textContent?.trim()
+      return ['failed', 'rejected', 'settled', 'silent'].includes(label ?? '')
+    },
+    ordinal,
+    { timeout: 180_000 }
+  )
+  const label = await page
+    .locator('.causal-entry')
+    .nth(ordinal - 1)
+    .locator('.act-line [data-slot="badge"]')
+    .textContent()
+  if (label?.trim() !== 'settled' && label?.trim() !== 'silent') {
+    const detail = await page
+      .locator('.causal-entry')
+      .nth(ordinal - 1)
+      .textContent()
+    throw new Error(`Real Pi Act ${ordinal} did not settle successfully: ${detail}`)
+  }
+  return label.trim()
+}
+
+async function realDesktopFlow({ desktopDirectory, model, provider, temporary, userData }) {
+  await mkdir(desktopDirectory, { recursive: true })
+  const firstPidFile = path.join(temporary, 'real-desktop-runtime-p1.pid')
+  const secondPidFile = path.join(temporary, 'real-desktop-runtime-p2.pid')
+  const first = await launchRealDesktop({ model, pidFile: firstPidFile, provider, userData })
+  let beforeRestart
+  let firstObservations
+  let firstPid
+  let firstStatus
+  try {
+    await installDesktopObservations(first.page)
+    await first.page
+      .getByLabel('Offer Nox a request')
+      .fill(
+        'Observe this delivered Event and settle exactly one bounded Nox Act. Use propose_act once; an emission or explicit silence is valid.'
+      )
+    await first.page.getByRole('button', { name: 'Deliver' }).click()
+    firstStatus = await waitForRealTerminal(first.page, 1)
+    firstObservations = await first.page.evaluate(() => window.__noxObservations)
+    requireObservedDeliveryOrder(firstObservations, 'First real Pi Desktop Act')
+    beforeRestart = await desktopProjection(first.page)
+    await first.page.screenshot({ path: path.join(desktopDirectory, 'before-restart.png') })
+    firstPid = await readRuntimePid(firstPidFile)
+    process.kill(firstPid, 'SIGKILL')
+    await waitForProcessExit(firstPid)
+  } finally {
+    await first.electronApp.close()
+  }
+
+  const second = await launchRealDesktop({ model, pidFile: secondPidFile, provider, userData })
+  let afterRestart
+  let secondObservations
+  let secondPid
+  let secondStatus
+  try {
+    await installDesktopObservations(second.page)
+    await second.page
+      .getByLabel('Offer Nox a request')
+      .fill(
+        'This Event arrived after a hard runtime restart. Observe restored State and settle exactly one bounded Nox Act with propose_act once.'
+      )
+    await second.page.getByRole('button', { name: 'Deliver' }).click()
+    secondStatus = await waitForRealTerminal(second.page, 2)
+    secondObservations = await second.page.evaluate(() => window.__noxObservations)
+    requireObservedDeliveryOrder(secondObservations, 'Second real Pi Desktop Act')
+    afterRestart = await desktopProjection(second.page)
+    secondPid = await readRuntimePid(secondPidFile)
+    await second.page.screenshot({ path: path.join(desktopDirectory, 'after-restart.png') })
+    const outcome = second.page.locator('.emission').last()
+    if ((await outcome.count()) > 0) {
+      await outcome.screenshot({ path: path.join(desktopDirectory, 'silent-or-emitted.png') })
+    } else {
+      await second.page
+        .locator('.silent-settlement')
+        .last()
+        .screenshot({ path: path.join(desktopDirectory, 'silent-or-emitted.png') })
+    }
+  } finally {
+    await second.electronApp.close()
+  }
+
+  return {
+    afterRestart,
+    beforeRestart,
+    firstObservations,
+    firstPid,
+    secondObservations,
+    secondPid,
+    statuses: [firstStatus, secondStatus],
+    termination: { code: null, observedExited: true, signal: 'SIGKILL' }
   }
 }
 
@@ -220,40 +373,25 @@ const temporary = await mkdtemp(path.join(tmpdir(), 'nox-evidence-'))
 await mkdir(bundle, { recursive: true })
 
 try {
-  const first = await startRuntimeChild({
-    dataDirectory: temporary,
-    now: '2026-07-12T10:00:00.000Z',
-    phase: 'p1'
-  })
-  const receipt = await first.append('evidence-e1')
-  const beforeRestart = await first.waitForSnapshot(
-    view => view.actTerminals.length === 1 && view.openContinuations.length === 1 && view.state.stateVersion === 1
-  )
-  const firstPid = first.pid
-  const termination = await first.forceTerminate()
-
-  const second = await startRuntimeChild({
-    dataDirectory: temporary,
-    fireDue: true,
-    now: '2026-07-12T10:06:00.000Z',
-    phase: 'p2'
-  })
-  const afterRestart = await second.waitForSnapshot(
-    view => view.actTerminals.length === 2 && view.emissions.length === 2 && view.state.stateVersion === 3
-  )
-  const secondPid = second.pid
-  await second.close()
-
+  const desktopDirectory = path.join(bundle, 'desktop')
+  await mkdir(desktopDirectory, { recursive: true })
+  const desktopUserData = path.join(temporary, 'desktop-user-data')
+  const desktopFlow = await deterministicDesktopFlow({ desktopDirectory, temporary, userData: desktopUserData })
   const deterministicDirectory = path.join(bundle, 'deterministic')
   const databaseTarget = path.join(deterministicDirectory, 'nox.sqlite')
   await mkdir(deterministicDirectory, { recursive: true })
-  const evidenceStore = new SqliteStore(path.join(temporary, 'nox.sqlite'))
+  const evidenceStore = new SqliteStore(path.join(desktopUserData, 'runtime/nox.sqlite'))
   await evidenceStore.createEvidenceCopy(databaseTarget)
   evidenceStore.close()
-  const audit = verifyAuditDatabase(databaseTarget, afterRestart.state.stateVersion)
+  const audit = verifyAuditDatabase(databaseTarget, desktopFlow.afterRestart.stateVersion)
   const reader = new SqliteAuditReader(databaseTarget)
   const records = reader.readJournal()
+  const receipts = reader.readExternalReceipts()
+  const beforeSnapshot = reader.loadSnapshot(desktopFlow.beforeRestart.stateVersion)
+  const afterSnapshot = reader.loadSnapshot(desktopFlow.afterRestart.stateVersion)
   reader.close()
+  if (receipts.length !== 1) throw new Error(`Expected one Desktop-delivered Event receipt, found ${receipts.length}`)
+  const receipt = receipts[0]
 
   const recorded = recordFor(
     records,
@@ -288,19 +426,19 @@ try {
   await writeJson(path.join(deterministicDirectory, 'state-replay.json'), audit.replay)
   await writeJson(path.join(deterministicDirectory, 'process-restart.json'), {
     afterRestart: {
-      journalCursor: afterRestart.journalCursor,
-      pid: secondPid,
-      stateHash: afterRestart.state.stateHash,
-      stateVersion: afterRestart.state.stateVersion
+      journalCursor: desktopFlow.afterRestart.journalCursor,
+      pid: desktopFlow.secondPid,
+      stateHash: afterSnapshot.stateHash,
+      stateVersion: desktopFlow.afterRestart.stateVersion
     },
     beforeRestart: {
-      journalCursor: beforeRestart.journalCursor,
-      pid: firstPid,
-      stateHash: beforeRestart.state.stateHash,
-      stateVersion: beforeRestart.state.stateVersion
+      journalCursor: desktopFlow.beforeRestart.journalCursor,
+      pid: desktopFlow.firstPid,
+      stateHash: beforeSnapshot.stateHash,
+      stateVersion: desktopFlow.beforeRestart.stateVersion
     },
-    pidsDiffer: firstPid !== secondPid,
-    termination
+    pidsDiffer: desktopFlow.firstPid !== desktopFlow.secondPid,
+    termination: desktopFlow.termination
   })
   await writeJson(path.join(deterministicDirectory, 'input-hashes.json'), { inputs: inputHashes })
   await copyFile(
@@ -308,28 +446,6 @@ try {
     path.join(deterministicDirectory, 'receipt-recovery.json')
   )
 
-  const desktopDirectory = path.join(bundle, 'desktop')
-  await mkdir(desktopDirectory, { recursive: true })
-  await copyFile(
-    path.join(root, 'docs/goals/nox-first-causal-loop/artifacts/task8-running.png'),
-    path.join(desktopDirectory, 'before-restart.png')
-  )
-  const desktopUserData = path.join(temporary, 'desktop-user-data')
-  await captureDesktop({
-    databasePath: databaseTarget,
-    environment: {
-      NOX_RUNTIME_ENTRY: path.join(root, 'packages/testkit/dist/runtime-child-main.js'),
-      NOX_TEST_NOW: '2026-07-12T10:06:00.000Z',
-      NOX_TEST_PHASE: 'desktop-restore',
-      NOX_TEST_SCENARIO: 'first-loop'
-    },
-    screenshotPaths: [
-      path.join(desktopDirectory, 'after-restart.png'),
-      path.join(desktopDirectory, 'silent-or-emitted.png')
-    ],
-    stateVersion: 3,
-    userData: desktopUserData
-  })
   await writeJson(path.join(desktopDirectory, 'rpc-trace.json'), {
     clientEventId: receipt.clientEventId,
     eventId: receipt.eventId,
@@ -338,9 +454,29 @@ try {
       eventAdmittedSequence: admitted.sequence,
       eventRecordedSequence: recorded.sequence
     },
-    observationOrder: ['receipt-frame-flushed', 'event.admitted', 'act.started'],
+    observationOrder: desktopFlow.observationOrder,
+    rawObservations: desktopFlow.rawObservations,
     receipt,
     requestId: 'rpc-1'
+  })
+  await writeJson(path.join(desktopDirectory, 'capture-report.json'), {
+    afterRestart: {
+      ...desktopFlow.afterRestart,
+      screenshot: 'desktop/after-restart.png',
+      screenshotSha256: digest(await readFile(path.join(desktopDirectory, 'after-restart.png'))),
+      stateHash: afterSnapshot.stateHash
+    },
+    beforeRestart: {
+      ...desktopFlow.beforeRestart,
+      screenshot: 'desktop/before-restart.png',
+      screenshotSha256: digest(await readFile(path.join(desktopDirectory, 'before-restart.png'))),
+      stateHash: beforeSnapshot.stateHash
+    },
+    outcome: {
+      screenshot: 'desktop/silent-or-emitted.png',
+      screenshotSha256: digest(await readFile(path.join(desktopDirectory, 'silent-or-emitted.png'))),
+      settlement: 'completed-with-emission'
+    }
   })
 
   let realPiStatus = realPiRequested ? 'fail' : 'not-requested'
@@ -348,77 +484,38 @@ try {
   const realModel = process.env.NOX_PI_MODEL ?? 'gpt-5.4-mini'
   if (realPiRequested) {
     const realDirectory = path.join(bundle, 'real-pi')
-    const realData = path.join(temporary, 'real-pi-data')
-    const realDatabase = path.join(realData, 'nox.sqlite')
+    const realDesktopDirectory = path.join(realDirectory, 'desktop')
+    const realUserData = path.join(temporary, 'real-pi-desktop-user-data')
+    const realDatabase = path.join(realUserData, 'runtime/nox.sqlite')
     await mkdir(realDirectory, { recursive: true })
-    let firstReal
-    let secondReal
     try {
       if (!process.env.NOX_PI_API_KEY) throw new Error('NOX_PI_API_KEY is required for a real Pi evidence run')
-      firstReal = await startProductionRuntime({
-        dataDirectory: realData,
-        interfaceOwnerId: 'nox-desktop-primary',
-        launchToken: `real-pi-${runId}-p1`,
+      const realFlow = await realDesktopFlow({
+        desktopDirectory: realDesktopDirectory,
         model: realModel,
-        provider: realProvider
+        provider: realProvider,
+        temporary,
+        userData: realUserData
       })
-      const firstReceipt = await firstReal.append(
-        'real-pi-e1',
-        'Observe this delivered Event and settle exactly one bounded Nox Act. Use propose_act once; an emission or explicit silence is valid.'
-      )
-      const firstView = await firstReal.waitForSnapshot(view => view.actTerminals.length === 1)
-      const firstTerminal = firstView.actTerminals[0]
-      if (!terminalSucceeded(firstTerminal)) {
-        throw new Error(`First real Pi Act did not succeed: ${JSON.stringify(firstTerminal)}`)
-      }
-      const firstRealPid = firstReal.pid
-      const realTermination = await firstReal.forceTerminate()
-      firstReal = undefined
-
-      const beforeDatabase = path.join(temporary, 'real-before-restart.sqlite')
-      const beforeStore = new SqliteStore(realDatabase)
-      await beforeStore.createEvidenceCopy(beforeDatabase)
-      beforeStore.close()
-      await captureDesktop({
-        databasePath: beforeDatabase,
-        environment: {
-          NOX_PI_API_KEY: process.env.NOX_PI_API_KEY,
-          NOX_PI_MODEL: realModel,
-          NOX_PI_PROVIDER: realProvider
-        },
-        screenshotPaths: [path.join(desktopDirectory, 'before-restart.png')],
-        stateVersion: firstView.state.stateVersion,
-        userData: path.join(temporary, 'real-desktop-before')
-      })
-
-      secondReal = await startProductionRuntime({
-        dataDirectory: realData,
-        interfaceOwnerId: 'nox-desktop-primary',
-        launchToken: `real-pi-${runId}-p2`,
-        model: realModel,
-        provider: realProvider
-      })
-      const secondReceipt = await secondReal.append(
-        'real-pi-e2',
-        'This Event arrived after a hard runtime restart. Observe restored State and settle exactly one bounded Nox Act with propose_act once.'
-      )
-      const secondView = await secondReal.waitForSnapshot(view => view.actTerminals.length === 2)
-      const secondTerminal = secondView.actTerminals.find(terminal => terminal.actId !== firstTerminal.actId)
-      if (!terminalSucceeded(secondTerminal)) {
-        throw new Error(`Second real Pi Act did not succeed: ${JSON.stringify(secondTerminal)}`)
-      }
-      const secondRealPid = secondReal.pid
-      await secondReal.close()
-      secondReal = undefined
-
       const realDatabaseTarget = path.join(realDirectory, 'nox.sqlite')
       const finalStore = new SqliteStore(realDatabase)
       await finalStore.createEvidenceCopy(realDatabaseTarget)
       finalStore.close()
-      const realAudit = verifyAuditDatabase(realDatabaseTarget, secondView.state.stateVersion)
       const realReader = new SqliteAuditReader(realDatabaseTarget)
       const realRecords = realReader.readJournal()
+      const realReceipts = realReader.readExternalReceipts()
+      const realTerminals = realRecords.flatMap(record =>
+        record.entry.kind === 'act.terminal' ? [record.entry.terminal] : []
+      )
+      if (realReceipts.length !== 2 || realTerminals.length !== 2) {
+        throw new Error(
+          `Real Pi Desktop run expected two receipts and terminals, found ${realReceipts.length}/${realTerminals.length}`
+        )
+      }
+      const realBeforeSnapshot = realReader.loadSnapshot(realFlow.beforeRestart.stateVersion)
+      const realAfterSnapshot = realReader.loadSnapshot(realFlow.afterRestart.stateVersion)
       realReader.close()
+      const realAudit = verifyAuditDatabase(realDatabaseTarget, realFlow.afterRestart.stateVersion)
       const realInputs = realRecords.flatMap(record =>
         record.entry.kind === 'act.started'
           ? [{ actId: record.entry.act.actId, inputHash: record.entry.act.input.blobHash }]
@@ -431,47 +528,55 @@ try {
       await writeJson(path.join(realDirectory, 'state-replay.json'), realAudit.replay)
       await writeJson(path.join(realDirectory, 'process-restart.json'), {
         afterRestart: {
-          pid: secondRealPid,
-          stateHash: secondView.state.stateHash,
-          stateVersion: secondView.state.stateVersion
+          journalCursor: realFlow.afterRestart.journalCursor,
+          pid: realFlow.secondPid,
+          stateHash: realAfterSnapshot.stateHash,
+          stateVersion: realFlow.afterRestart.stateVersion
         },
         beforeRestart: {
-          pid: firstRealPid,
-          stateHash: firstView.state.stateHash,
-          stateVersion: firstView.state.stateVersion
+          journalCursor: realFlow.beforeRestart.journalCursor,
+          pid: realFlow.firstPid,
+          stateHash: realBeforeSnapshot.stateHash,
+          stateVersion: realFlow.beforeRestart.stateVersion
         },
-        pidsDiffer: firstRealPid !== secondRealPid,
-        termination: realTermination
+        pidsDiffer: realFlow.firstPid !== realFlow.secondPid,
+        termination: realFlow.termination
       })
       await writeJson(path.join(realDirectory, 'input-hashes.json'), { inputs: realInputs })
       await writeJson(path.join(realDirectory, 'real-pi-run.json'), {
         attemptsPerAct: 1,
         model: realModel,
         provider: realProvider,
-        statuses: [firstTerminal.status, secondTerminal.status],
+        statuses: realTerminals.map(terminal => terminal.status),
         status: 'pass'
       })
-      await writeJson(path.join(desktopDirectory, 'rpc-trace.json'), {
-        requests: [rpcTraceFor(realRecords, firstReceipt, 'rpc-1'), rpcTraceFor(realRecords, secondReceipt, 'rpc-2')]
+      await writeJson(path.join(realDirectory, 'rpc-trace.json'), {
+        requests: [
+          rpcTraceFor(realRecords, realReceipts[0], 'rpc-1', realFlow.firstObservations),
+          rpcTraceFor(realRecords, realReceipts[1], 'rpc-2', realFlow.secondObservations)
+        ]
       })
-      await captureDesktop({
-        databasePath: realDatabaseTarget,
-        environment: {
-          NOX_PI_API_KEY: process.env.NOX_PI_API_KEY,
-          NOX_PI_MODEL: realModel,
-          NOX_PI_PROVIDER: realProvider
+      await writeJson(path.join(realDesktopDirectory, 'capture-report.json'), {
+        afterRestart: {
+          ...realFlow.afterRestart,
+          screenshot: 'real-pi/desktop/after-restart.png',
+          screenshotSha256: digest(await readFile(path.join(realDesktopDirectory, 'after-restart.png'))),
+          stateHash: realAfterSnapshot.stateHash
         },
-        screenshotPaths: [
-          path.join(desktopDirectory, 'after-restart.png'),
-          path.join(desktopDirectory, 'silent-or-emitted.png')
-        ],
-        stateVersion: secondView.state.stateVersion,
-        userData: path.join(temporary, 'real-desktop-after')
+        beforeRestart: {
+          ...realFlow.beforeRestart,
+          screenshot: 'real-pi/desktop/before-restart.png',
+          screenshotSha256: digest(await readFile(path.join(realDesktopDirectory, 'before-restart.png'))),
+          stateHash: realBeforeSnapshot.stateHash
+        },
+        outcome: {
+          screenshot: 'real-pi/desktop/silent-or-emitted.png',
+          screenshotSha256: digest(await readFile(path.join(realDesktopDirectory, 'silent-or-emitted.png'))),
+          settlement: realFlow.statuses[1]
+        }
       })
       realPiStatus = 'pass'
     } catch (error) {
-      await firstReal?.close().catch(() => undefined)
-      await secondReal?.close().catch(() => undefined)
       if (await stat(realDatabase).catch(() => undefined)) {
         const failedStore = new SqliteStore(realDatabase)
         await failedStore.createEvidenceCopy(path.join(realDirectory, 'nox.sqlite'))
@@ -501,6 +606,7 @@ try {
   const lockBytes = await readFile(path.join(root, 'package-lock.json'))
   await writeJson(path.join(bundle, 'versions.json'), {
     dependencyLockSha256: digest(lockBytes),
+    evidenceLane: realPiRequested ? 'full' : 'deterministic',
     node: process.version,
     npm: npmVersion.output.trim(),
     protocolVersion: 1,
@@ -513,7 +619,13 @@ try {
     'utf8'
   )
 
+  for (const databasePath of [databaseTarget, path.join(bundle, 'real-pi/nox.sqlite')]) {
+    await rm(`${databasePath}-shm`, { force: true })
+    await rm(`${databasePath}-wal`, { force: true })
+  }
+
   const artifactFiles = (await filesBelow(bundle)).filter(file => path.basename(file) !== 'manifest.json')
+  const redaction = await scanEvidenceFiles(artifactFiles)
   const artifacts = []
   for (const file of artifactFiles) {
     const bytes = await readFile(file)
@@ -527,21 +639,28 @@ try {
     artifacts,
     commands: commands.map(({ command, exitCode }) => ({ command, exitCode })),
     dependencyLockSha256: digest(lockBytes),
+    evidenceLane: realPiRequested ? 'full' : 'deterministic',
     model: realPiRequested
       ? { id: realModel, provider: realProvider }
       : { id: 'scripted-cortex', provider: 'deterministic-testkit' },
     protocolVersion: 1,
-    redaction: { credentials: 0, hiddenReasoning: 0, secrets: 0, status: 'pass' },
+    redaction,
     runId,
     sourceCommit: git.output.trim(),
     sourceTreeDirty: gitStatus.output.trim().length > 0,
     status:
-      killCriteria.status === 'pass' && audit.status === 'pass' && (!realPiRequested || realPiStatus === 'pass')
+      killCriteria.status === 'pass' &&
+      audit.status === 'pass' &&
+      redaction.status === 'pass' &&
+      (!realPiRequested || realPiStatus === 'pass')
         ? 'pass'
         : 'fail'
   })
   const status =
-    killCriteria.status === 'pass' && audit.status === 'pass' && (!realPiRequested || realPiStatus === 'pass')
+    killCriteria.status === 'pass' &&
+    audit.status === 'pass' &&
+    redaction.status === 'pass' &&
+    (!realPiRequested || realPiStatus === 'pass')
       ? 'pass'
       : 'fail'
   process.stdout.write(`${JSON.stringify({ bundle, runId, status })}\n`)

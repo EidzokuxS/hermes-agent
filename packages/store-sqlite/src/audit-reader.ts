@@ -4,8 +4,8 @@ import { createHash } from 'node:crypto'
 import type { PathLike } from 'node:fs'
 import { DatabaseSync } from 'node:sqlite'
 
-import { journalRecordSchema, provenanceSchema, stateSnapshotSchema } from '@nox/protocol'
-import type { JournalRecord, Provenance, StateSnapshot } from '@nox/protocol'
+import { eventReceiptSchema, journalRecordSchema, provenanceSchema, stateSnapshotSchema } from '@nox/protocol'
+import type { EventReceipt, JournalRecord, Provenance, StateSnapshot } from '@nox/protocol'
 
 import { foundationMigration } from './migrations.js'
 import type { AuditBlobRow, JournalRow, MigrationRow, SnapshotRow } from './schema.js'
@@ -50,6 +50,7 @@ export class SqliteAuditReader {
     const afterSequence = query.afterSequence ?? 0
     const limit = Math.min(Math.max(query.limit ?? 10_000, 1), 100_000)
     const kinds = query.kinds ?? []
+    const order = query.order === 'descending' ? 'DESC' : 'ASC'
     const kindClause = kinds.length === 0 ? '' : `AND entry_kind IN (${kinds.map(() => '?').join(', ')})`
     const rows = this.#database
       .prepare(
@@ -57,11 +58,19 @@ export class SqliteAuditReader {
                 journal_schema_version, recorded_at, entry_json, provenance_json, causal_json
          FROM journal_records
          WHERE sequence > ? ${kindClause}
-         ORDER BY sequence
+         ORDER BY sequence ${order}
          LIMIT ?`
       )
       .all(afterSequence, ...kinds, limit) as unknown as JournalRow[]
     return rows.map(row => this.#parseJournalRow(row))
+  }
+
+  readExternalReceipts(): EventReceipt[] {
+    this.#assertOpen()
+    const rows = this.#database
+      .prepare('SELECT receipt_json FROM external_event_receipts ORDER BY journal_sequence')
+      .all() as unknown as Array<{ receipt_json: string }>
+    return rows.map(({ receipt_json }) => eventReceiptSchema.parse(parseJson(receipt_json)))
   }
 
   readRejectedEffects(): JournalRecord[] {

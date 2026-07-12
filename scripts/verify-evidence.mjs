@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto'
-import { readFile, readdir } from 'node:fs/promises'
+import { copyFile, mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+
+import { scanEvidenceFiles } from './evidence-secret-scan.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -36,8 +39,31 @@ function requireCondition(condition, message) {
   if (!condition) throw new Error(message)
 }
 
+async function verifyDatabaseCopy(source, desktopVersion, verifyAuditDatabase) {
+  const temporary = await mkdtemp(path.join(tmpdir(), 'nox-offline-verify-'))
+  const target = path.join(temporary, 'nox.sqlite')
+  try {
+    await copyFile(source, target)
+    return verifyAuditDatabase(target, desktopVersion)
+  } finally {
+    await rm(temporary, { force: true, recursive: true })
+  }
+}
+
+async function inspectDatabaseCopy(source, inspect) {
+  const temporary = await mkdtemp(path.join(tmpdir(), 'nox-offline-inspect-'))
+  const target = path.join(temporary, 'nox.sqlite')
+  try {
+    await copyFile(source, target)
+    return await inspect(target)
+  } finally {
+    await rm(temporary, { force: true, recursive: true })
+  }
+}
+
 const bundleArgument = argument('bundle')
 if (!bundleArgument) throw new Error('Usage: verify-evidence --bundle <run-directory>')
+const deterministicOnly = process.argv.includes('--deterministic-only')
 const bundle = path.resolve(root, bundleArgument)
 const manifest = await json(path.join(bundle, 'manifest.json'))
 requireCondition(manifest.status === 'pass', 'Evidence manifest is not passing')
@@ -61,11 +87,29 @@ const actual = (await filesBelow(bundle))
   .filter(file => file !== 'manifest.json')
 requireCondition(actual.length === expected.size, 'Bundle file set does not match the manifest')
 for (const file of actual) requireCondition(expected.has(file), `Unmanifested artifact: ${file}`)
+const redaction = await scanEvidenceFiles(actual.map(file => path.join(bundle, file)))
+requireCondition(redaction.status === 'pass', 'Independent evidence secret scan failed')
+requireCondition(
+  JSON.stringify({
+    credentials: redaction.credentials,
+    hiddenReasoning: redaction.hiddenReasoning,
+    secrets: redaction.secrets,
+    status: redaction.status
+  }) ===
+    JSON.stringify({
+      credentials: manifest.redaction.credentials,
+      hiddenReasoning: manifest.redaction.hiddenReasoning,
+      secrets: manifest.redaction.secrets,
+      status: manifest.redaction.status
+    }),
+  'Evidence redaction declaration does not match the independent scan'
+)
 
 const required = [
   'commands.log',
   'desktop/after-restart.png',
   'desktop/before-restart.png',
+  'desktop/capture-report.json',
   'desktop/rpc-trace.json',
   'desktop/silent-or-emitted.png',
   'deterministic/causal-trace.json',
@@ -81,7 +125,8 @@ const required = [
 ]
 for (const file of required) requireCondition(expected.has(file), `Required artifact is missing: ${file}`)
 
-const { canonicalHash, journalRecordSchema } = await import('@nox/protocol')
+const { canonicalHash, canonicalStringify, cortexInputSchema, journalRecordSchema } = await import('@nox/protocol')
+const { SqliteAuditReader } = await import('@nox/store-sqlite')
 const trace = await json(path.join(bundle, 'deterministic/causal-trace.json'))
 const records = (trace.records ?? []).map(record => journalRecordSchema.parse(record))
 requireCondition(canonicalHash(records) === trace.canonicalTraceHash, 'Canonical causal trace hash mismatch')
@@ -92,10 +137,38 @@ for (const [index, record] of records.entries()) {
 const stateReplay = await json(path.join(bundle, 'deterministic/state-replay.json'))
 requireCondition(stateReplay.status === 'pass', 'Independent State replay artifact failed')
 const { verifyAuditDatabase } = await import(pathToFileURL(path.join(root, 'apps/audit/dist/verify.js')).href)
-const databaseReport = verifyAuditDatabase(path.join(bundle, 'deterministic/nox.sqlite'), stateReplay.finalStateVersion)
+const databaseReport = await verifyDatabaseCopy(
+  path.join(bundle, 'deterministic/nox.sqlite'),
+  stateReplay.finalStateVersion,
+  verifyAuditDatabase
+)
 requireCondition(
   databaseReport.replay.finalStateHash === stateReplay.finalStateHash,
   'Offline database replay hash mismatch'
+)
+const databaseEvidence = await inspectDatabaseCopy(path.join(bundle, 'deterministic/nox.sqlite'), databasePath => {
+  const reader = new SqliteAuditReader(databasePath)
+  try {
+    const databaseRecords = reader.readJournal({ limit: 100_000 })
+    const receipts = reader.readExternalReceipts()
+    const inputBlobs = databaseRecords.flatMap(record => {
+      if (record.entry.kind !== 'act.started') return []
+      const inputHash = record.entry.act.input.blobHash
+      const blob = reader.getAuditBlob(inputHash)
+      requireCondition(blob !== undefined, `CortexInput blob is missing: ${inputHash}`)
+      const input = cortexInputSchema.parse(JSON.parse(Buffer.from(blob.bytes).toString('utf8')))
+      requireCondition(canonicalHash(input) === inputHash, `CortexInput blob hash mismatch: ${inputHash}`)
+      requireCondition(input.actId === record.entry.act.actId, `CortexInput Act ID mismatch: ${inputHash}`)
+      return [{ actId: record.entry.act.actId, inputHash }]
+    })
+    return { inputBlobs, receipts, records: databaseRecords }
+  } finally {
+    reader.close()
+  }
+})
+requireCondition(
+  canonicalStringify(databaseEvidence.records) === canonicalStringify(records),
+  'Exported causal trace does not match the SQLite Journal record-for-record'
 )
 
 const restart = await json(path.join(bundle, 'deterministic/process-restart.json'))
@@ -107,11 +180,37 @@ requireCondition(
 )
 requireCondition(restart.afterRestart?.stateVersion === stateReplay.finalStateVersion, 'Restart State version mismatch')
 
+const capture = await json(path.join(bundle, 'desktop/capture-report.json'))
+for (const phase of ['beforeRestart', 'afterRestart']) {
+  const screenshot = expected.get(capture[phase]?.screenshot)
+  requireCondition(screenshot !== undefined, `${phase} screenshot is absent from the manifest`)
+  requireCondition(screenshot.sha256 === capture[phase].screenshotSha256, `${phase} screenshot hash is not bound`)
+  requireCondition(
+    capture[phase].journalCursor === restart[phase].journalCursor &&
+      capture[phase].stateHash === restart[phase].stateHash &&
+      capture[phase].stateVersion === restart[phase].stateVersion,
+    `${phase} Desktop capture does not match restart evidence`
+  )
+}
+requireCondition(capture.beforeRestart.requests?.length === 1, 'Before-restart Desktop capture has wrong requests')
+requireCondition(capture.beforeRestart.emissions?.length === 1, 'Before-restart Desktop capture has wrong emissions')
+requireCondition(capture.beforeRestart.continuations?.length === 1, 'Before-restart Continuation is not visible')
+requireCondition(capture.afterRestart.requests?.length === 2, 'After-restart Desktop capture has wrong causal events')
+requireCondition(capture.afterRestart.emissions?.length === 2, 'After-restart Desktop capture has wrong emissions')
+requireCondition(capture.afterRestart.continuations?.length === 0, 'Fired Continuation remained visible after restart')
+const outcomeScreenshot = expected.get(capture.outcome?.screenshot)
+requireCondition(outcomeScreenshot !== undefined, 'Outcome screenshot is absent from the manifest')
+requireCondition(outcomeScreenshot.sha256 === capture.outcome.screenshotSha256, 'Outcome screenshot hash is not bound')
+
 const inputs = await json(path.join(bundle, 'deterministic/input-hashes.json'))
 requireCondition(Array.isArray(inputs.inputs) && inputs.inputs.length === 2, 'Expected exactly two CortexInput hashes')
 requireCondition(
   inputs.inputs.every(input => /^sha256:[0-9a-f]{64}$/.test(input.inputHash)),
   'Invalid CortexInput hash'
+)
+requireCondition(
+  canonicalStringify(inputs.inputs) === canonicalStringify(databaseEvidence.inputBlobs),
+  'CortexInput hash report does not match ActStarted records and stored blobs'
 )
 
 const recovery = await json(path.join(bundle, 'deterministic/receipt-recovery.json'))
@@ -147,15 +246,31 @@ for (const request of rpcRequests) {
       JSON.stringify(['receipt-frame-flushed', 'event.admitted', 'act.started']),
     `${request.requestId ?? 'RPC'} client observation order is invalid`
   )
+  const durableReceipt = databaseEvidence.receipts.find(receipt => receipt.eventId === request.eventId)
+  requireCondition(durableReceipt !== undefined, `${request.requestId ?? 'RPC'} receipt is absent from SQLite`)
+  requireCondition(
+    canonicalStringify(durableReceipt) === canonicalStringify(request.receipt),
+    `${request.requestId ?? 'RPC'} receipt does not match SQLite`
+  )
+}
+
+if (!deterministicOnly) {
+  requireCondition(manifest.evidenceLane === 'full', 'Full verification requires a full real-Pi evidence lane')
+  requireCondition(expected.has('real-pi/real-pi-run.json'), 'Full verification requires real-Pi evidence')
 }
 
 if (expected.has('real-pi/real-pi-run.json')) {
   const realRequired = [
     'real-pi/causal-trace.json',
+    'real-pi/desktop/after-restart.png',
+    'real-pi/desktop/before-restart.png',
+    'real-pi/desktop/capture-report.json',
+    'real-pi/desktop/silent-or-emitted.png',
     'real-pi/input-hashes.json',
     'real-pi/nox.sqlite',
     'real-pi/process-restart.json',
     'real-pi/real-pi-run.json',
+    'real-pi/rpc-trace.json',
     'real-pi/state-replay.json'
   ]
   for (const file of realRequired) requireCondition(expected.has(file), `Real Pi artifact is missing: ${file}`)
@@ -167,13 +282,81 @@ if (expected.has('real-pi/real-pi-run.json')) {
   const realRecords = (realTrace.records ?? []).map(record => journalRecordSchema.parse(record))
   requireCondition(canonicalHash(realRecords) === realTrace.canonicalTraceHash, 'Real Pi causal trace hash mismatch')
   const realReplay = await json(path.join(bundle, 'real-pi/state-replay.json'))
-  const realDatabase = verifyAuditDatabase(path.join(bundle, 'real-pi/nox.sqlite'), realReplay.finalStateVersion)
+  const realDatabase = await verifyDatabaseCopy(
+    path.join(bundle, 'real-pi/nox.sqlite'),
+    realReplay.finalStateVersion,
+    verifyAuditDatabase
+  )
   requireCondition(realDatabase.replay.finalStateHash === realReplay.finalStateHash, 'Real Pi database replay mismatch')
+  const realDatabaseEvidence = await inspectDatabaseCopy(path.join(bundle, 'real-pi/nox.sqlite'), databasePath => {
+    const reader = new SqliteAuditReader(databasePath)
+    try {
+      const databaseRecords = reader.readJournal({ limit: 100_000 })
+      const receipts = reader.readExternalReceipts()
+      const inputBlobs = databaseRecords.flatMap(record => {
+        if (record.entry.kind !== 'act.started') return []
+        const inputHash = record.entry.act.input.blobHash
+        const blob = reader.getAuditBlob(inputHash)
+        requireCondition(blob !== undefined, `Real Pi CortexInput blob is missing: ${inputHash}`)
+        const input = cortexInputSchema.parse(JSON.parse(Buffer.from(blob.bytes).toString('utf8')))
+        requireCondition(canonicalHash(input) === inputHash, `Real Pi CortexInput blob hash mismatch: ${inputHash}`)
+        return [{ actId: record.entry.act.actId, inputHash }]
+      })
+      return { inputBlobs, receipts, records: databaseRecords }
+    } finally {
+      reader.close()
+    }
+  })
+  requireCondition(
+    canonicalStringify(realDatabaseEvidence.records) === canonicalStringify(realRecords),
+    'Real Pi causal trace does not match SQLite record-for-record'
+  )
   const realRestart = await json(path.join(bundle, 'real-pi/process-restart.json'))
   requireCondition(realRestart.pidsDiffer === true, 'Real Pi runtime restart reused its PID')
   const realInputs = await json(path.join(bundle, 'real-pi/input-hashes.json'))
   requireCondition(realInputs.inputs?.length === 2, 'Real Pi run must retain exactly two CortexInput hashes')
-  requireCondition(rpcRequests.length === 2, 'Real Pi RPC trace must contain E1 and E2')
+  requireCondition(
+    canonicalStringify(realInputs.inputs) === canonicalStringify(realDatabaseEvidence.inputBlobs),
+    'Real Pi input report does not match ActStarted records and blobs'
+  )
+  const realRpc = await json(path.join(bundle, 'real-pi/rpc-trace.json'))
+  requireCondition(realRpc.requests?.length === 2, 'Real Pi RPC trace must contain E1 and E2')
+  for (const request of realRpc.requests) {
+    requireCondition(
+      JSON.stringify(request.observationOrder) ===
+        JSON.stringify(['receipt-frame-flushed', 'event.admitted', 'act.started']),
+      `${request.requestId} real Pi client observation order is invalid`
+    )
+    const receipt = realDatabaseEvidence.receipts.find(item => item.eventId === request.eventId)
+    requireCondition(receipt !== undefined, `${request.requestId} real Pi receipt is absent from SQLite`)
+    requireCondition(
+      canonicalStringify(receipt) === canonicalStringify(request.receipt),
+      `${request.requestId} real Pi receipt does not match SQLite`
+    )
+  }
+  const realCapture = await json(path.join(bundle, 'real-pi/desktop/capture-report.json'))
+  for (const phase of ['beforeRestart', 'afterRestart']) {
+    const screenshot = expected.get(realCapture[phase]?.screenshot)
+    requireCondition(screenshot !== undefined, `Real Pi ${phase} screenshot is absent from the manifest`)
+    requireCondition(
+      screenshot.sha256 === realCapture[phase].screenshotSha256,
+      `Real Pi ${phase} screenshot hash is not bound`
+    )
+    requireCondition(
+      realCapture[phase].journalCursor === realRestart[phase].journalCursor &&
+        realCapture[phase].stateHash === realRestart[phase].stateHash &&
+        realCapture[phase].stateVersion === realRestart[phase].stateVersion,
+      `Real Pi ${phase} Desktop capture does not match restart evidence`
+    )
+  }
+  requireCondition(realCapture.beforeRestart.requests?.length === 1, 'Real Pi first Desktop Act is not visible')
+  requireCondition(realCapture.afterRestart.requests?.length === 2, 'Real Pi second Desktop Act is not visible')
+  const realOutcome = expected.get(realCapture.outcome?.screenshot)
+  requireCondition(realOutcome !== undefined, 'Real Pi outcome screenshot is absent from the manifest')
+  requireCondition(
+    realOutcome.sha256 === realCapture.outcome.screenshotSha256,
+    'Real Pi outcome screenshot hash is not bound'
+  )
 }
 
 const killCriteria = await json(path.join(bundle, 'reviews/kill-criteria.json'))
@@ -185,7 +368,9 @@ requireCondition(
 const versions = await json(path.join(bundle, 'versions.json'))
 requireCondition(versions.dependencyLockSha256 === manifest.dependencyLockSha256, 'Lockfile hash mismatch')
 requireCondition(versions.sourceCommit === manifest.sourceCommit, 'Source commit mismatch')
+const pinnedNode = (await readFile(path.join(root, '.node-version'), 'utf8')).trim()
+requireCondition(versions.node === `v${pinnedNode}`, `Evidence used ${versions.node}; pinned Node is v${pinnedNode}`)
 
 process.stdout.write(
-  `${JSON.stringify({ artifacts: expected.size, bundle, finalStateHash: stateReplay.finalStateHash, status: 'pass' })}\n`
+  `${JSON.stringify({ artifacts: expected.size, bundle, evidenceLane: deterministicOnly ? 'deterministic' : 'full', finalStateHash: stateReplay.finalStateHash, status: 'pass' })}\n`
 )

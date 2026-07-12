@@ -15,9 +15,13 @@ import { app, BrowserWindow, ipcMain, screen, session } from 'electron'
 
 import { launchNoxRuntime } from './nox-runtime-process.js'
 import type { NoxRuntimeProcess } from './nox-runtime-process.js'
+import { isTrustedRendererUrl, resolveDevelopmentUrl } from './renderer-origin.js'
 import { computeWindowOptions, debounce, sanitizeWindowState } from './window-state.js'
 
 const INTERFACE_OWNER_ID = 'nox-desktop-primary'
+const RENDERER_FILE = path.resolve(import.meta.dirname, '../renderer/index.html')
+
+const DEVELOPMENT_URL = resolveDevelopmentUrl(process.env.NOX_DESKTOP_DEV_URL)
 if (process.env.NOX_DESKTOP_USER_DATA) {
   app.setPath('userData', process.env.NOX_DESKTOP_USER_DATA)
 }
@@ -67,11 +71,10 @@ async function createWindow(): Promise<BrowserWindow> {
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', event => event.preventDefault())
   window.once('ready-to-show', () => window.show())
-  const developmentUrl = process.env.NOX_DESKTOP_DEV_URL
-  if (developmentUrl) {
-    await window.loadURL(developmentUrl)
+  if (DEVELOPMENT_URL !== undefined) {
+    await window.loadURL(DEVELOPMENT_URL)
   } else {
-    await window.loadFile(path.join(import.meta.dirname, '../renderer/index.html'))
+    await window.loadFile(RENDERER_FILE)
   }
   return window
 }
@@ -83,8 +86,18 @@ function requireClient(): NoxRpcClient {
   return rpcClient
 }
 
+function requireTrustedRenderer(event: Electron.IpcMainInvokeEvent): void {
+  if (mainWindow === undefined || event.sender !== mainWindow.webContents) {
+    throw new Error('Nox domain call came from an untrusted webContents')
+  }
+  if (event.senderFrame === null || !isTrustedRendererUrl(event.senderFrame.url, DEVELOPMENT_URL, RENDERER_FILE)) {
+    throw new Error('Nox domain call came from an untrusted renderer origin')
+  }
+}
+
 function installDomainHandlers(): void {
-  ipcMain.handle('nox:view-snapshot', async () => {
+  ipcMain.handle('nox:view-snapshot', async event => {
+    requireTrustedRenderer(event)
     const client = requireClient()
     const view = viewSnapshotSchema.parse(
       await client.call({ method: 'view.snapshot', params: { protocolVersion: PROTOCOL_VERSION } })
@@ -93,7 +106,8 @@ function installDomainHandlers(): void {
     startSubscriptionPump()
     return view
   })
-  ipcMain.handle('nox:event-append', async (_event, input: unknown) => {
+  ipcMain.handle('nox:event-append', async (event, input: unknown) => {
+    requireTrustedRenderer(event)
     if (typeof input !== 'object' || input === null) {
       throw new Error('Invalid Nox request')
     }
@@ -111,7 +125,8 @@ function installDomainHandlers(): void {
     }
     return eventAppendResultSchema.parse(await requireClient().call(call))
   })
-  ipcMain.handle('nox:act-cancel', async (_event, input: unknown) => {
+  ipcMain.handle('nox:act-cancel', async (event, input: unknown) => {
+    requireTrustedRenderer(event)
     if (typeof input !== 'object' || input === null) {
       throw new Error('Invalid Nox cancellation')
     }
@@ -175,7 +190,7 @@ installDomainHandlers()
 
 void app.whenReady().then(async () => {
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    const development = process.env.NOX_DESKTOP_DEV_URL !== undefined
+    const development = DEVELOPMENT_URL !== undefined
     callback({
       responseHeaders: {
         ...details.responseHeaders,

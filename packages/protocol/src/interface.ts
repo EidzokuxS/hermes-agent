@@ -78,7 +78,15 @@ const emissionInterfaceEventSchema = z
 const continuationInterfaceEventSchema = z
   .object({
     ...interfaceEventEnvelope,
-    continuation: continuationSchema,
+    continuation: z.union([
+      continuationSchema,
+      z
+        .object({
+          continuationId: boundedIdSchema,
+          status: z.enum(['cancelled', 'fired'])
+        })
+        .strict()
+    ]),
     kind: z.literal('continuation.changed')
   })
   .strict()

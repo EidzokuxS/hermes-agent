@@ -23,6 +23,7 @@ export interface JournalQuery {
   afterSequence?: number
   kinds?: string[]
   limit?: number
+  order?: 'ascending' | 'descending'
 }
 
 export interface AuditBlobInput {

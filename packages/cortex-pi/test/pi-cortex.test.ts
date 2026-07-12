@@ -10,12 +10,12 @@ import { canonicalHash, cortexInputSchema } from '@nox/protocol'
 import type { ActProposal, CortexInput } from '@nox/protocol'
 import { describe, expect, it } from 'vitest'
 
-import { PiCortex, resolvePiRunLimits } from '../src/index.js'
+import { createPiCortexReference, PiCortex, resolvePiRunLimits } from '../src/index.js'
 import type { PiOperationalArtifact } from '../src/index.js'
 
 const at = '2026-07-12T08:00:00.000Z'
 
-function inputFor(modelId: string): CortexInput {
+function inputFor(model: Model<Api>): CortexInput {
   return cortexInputSchema.parse({
     actId: 'act-001',
     bounds: {
@@ -27,13 +27,7 @@ function inputFor(modelId: string): CortexInput {
       timeoutMilliseconds: 30_000
     },
     builderVersion: 1,
-    cortex: {
-      adapter: 'pi',
-      configHash: `sha256:${'b'.repeat(64)}`,
-      cortexId: 'pi-primary',
-      modelId,
-      packageVersion: '0.80.6'
-    },
+    cortex: createPiCortexReference(model),
     identity: {
       conceptDocument: 'NOX-CONVERGENCE.md',
       identityId: 'nox',
@@ -107,7 +101,7 @@ function createHarness() {
     onArtifact: artifact => artifacts.push(artifact),
     streamFn: faux.streamSimple
   })
-  return { artifacts, cortex, faux, input: inputFor(model.id), model }
+  return { artifacts, cortex, faux, input: inputFor(model), model }
 }
 
 describe('bounded Pi CortexPort', () => {
@@ -229,7 +223,7 @@ describe('bounded Pi CortexPort', () => {
     expect(harness.faux.state.callCount).toBe(0)
   })
 
-  it('creates a fresh context for every Act and rejects model identity drift', async () => {
+  it('creates a fresh context for every Act and rejects complete configuration drift', async () => {
     const harness = createHarness()
     const contextLengths: number[] = []
     harness.faux.setResponses([
@@ -251,7 +245,39 @@ describe('bounded Pi CortexPort', () => {
         { ...harness.input, cortex: { ...harness.input.cortex, modelId: 'another-model' } },
         new AbortController().signal
       )
-    ).rejects.toThrow('does not match configured Pi model')
+    ).rejects.toThrow('does not match requested')
+
+    await expect(
+      harness.cortex.runAct(
+        { ...harness.input, cortex: { ...harness.input.cortex, configHash: `sha256:${'d'.repeat(64)}` } },
+        new AbortController().signal
+      )
+    ).rejects.toThrow('does not match requested')
+  })
+
+  it('redacts configured credentials from provider failures and operational artifacts', async () => {
+    const faux = createFauxCore({ models: [{ id: 'nox-faux', maxTokens: 4096 }] })
+    const model = faux.getModel() as Model<Api>
+    const secret = 'synthetic-secret-value-1234567890'
+    const artifacts: PiOperationalArtifact[] = []
+    const cortex = new PiCortex({
+      model,
+      onArtifact: artifact => artifacts.push(artifact),
+      sensitiveValues: [secret],
+      streamFn: faux.streamSimple
+    })
+    faux.setResponses([
+      fauxAssistantMessage('', { errorMessage: `provider echoed api_key=${secret}`, stopReason: 'error' })
+    ])
+
+    await expect(cortex.runAct(inputFor(model), new AbortController().signal)).resolves.toEqual({
+      code: 'pi-provider-error',
+      kind: 'provider-error',
+      message: 'provider echoed api_key=[REDACTED]',
+      retryable: false
+    })
+    expect(JSON.stringify(artifacts)).not.toContain(secret)
+    expect(JSON.stringify(artifacts)).toContain('[REDACTED]')
   })
 
   it('caps requested output tokens at the selected model limit', () => {

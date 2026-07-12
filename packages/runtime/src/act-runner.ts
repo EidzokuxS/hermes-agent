@@ -214,9 +214,10 @@ export class ActRunner {
     return this.#options.serialize(async () => {
       const snapshot = await this.#options.store.loadSnapshot()
       const journal: JournalRecord[] = []
-      for await (const record of this.#options.store.readJournal({ limit: 64 })) {
+      for await (const record of this.#options.store.readJournal({ limit: 64, order: 'descending' })) {
         journal.push(record)
       }
+      journal.reverse()
       const observedAt = this.#options.clock.now()
       const built = buildCortexInput({
         actId: control.actId,

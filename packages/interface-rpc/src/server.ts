@@ -2,7 +2,13 @@
 
 import { timingSafeEqual } from 'node:crypto'
 
-import { interfaceEmissionSchema, interfaceEventSchema, PROTOCOL_VERSION, viewSnapshotSchema } from '@nox/protocol'
+import {
+  canonicalHash,
+  interfaceEmissionSchema,
+  interfaceEventSchema,
+  PROTOCOL_VERSION,
+  viewSnapshotSchema
+} from '@nox/protocol'
 import type {
   Event,
   EventReceipt,
@@ -90,6 +96,44 @@ function emissionFromRecord(record: JournalRecord): InterfaceEmission | undefine
   })
 }
 
+function continuationFromRecord(record: JournalRecord): InterfaceEvent | undefined {
+  if (record.entry.kind !== 'effect.decision' || record.entry.decision.decision !== 'accepted') {
+    return undefined
+  }
+  const decision = record.entry.decision
+  const envelope = {
+    interfaceEventId: `interface:${record.recordId}`,
+    journalSequence: record.sequence,
+    observedAt: record.recordedAt,
+    protocolVersion: PROTOCOL_VERSION
+  }
+  if (decision.effect.kind === 'continuation.schedule') {
+    return interfaceEventSchema.parse({
+      ...envelope,
+      continuation: {
+        continuationId: `continuation:${canonicalHash({ actId: decision.actId, effectId: decision.effectId })}`,
+        createdAt: decision.decidedAt,
+        fireCount: 0,
+        originActId: decision.actId,
+        seed: decision.effect.seed,
+        status: 'open'
+      },
+      kind: 'continuation.changed'
+    })
+  }
+  if (decision.effect.kind === 'continuation.cancel' || decision.effect.kind === 'continuation.fire') {
+    return interfaceEventSchema.parse({
+      ...envelope,
+      continuation: {
+        continuationId: decision.effect.continuationId,
+        status: decision.effect.kind === 'continuation.fire' ? 'fired' : 'cancelled'
+      },
+      kind: 'continuation.changed'
+    })
+  }
+  return undefined
+}
+
 export function projectInterfaceEvents(records: JournalRecord[]): InterfaceEvent[] {
   const events: InterfaceEvent[] = []
   for (const record of records) {
@@ -115,6 +159,11 @@ export function projectInterfaceEvents(records: JournalRecord[]): InterfaceEvent
         })
       )
     } else {
+      const continuation = continuationFromRecord(record)
+      if (continuation !== undefined) {
+        events.push(continuation)
+        continue
+      }
       const emission = emissionFromRecord(record)
       if (emission !== undefined) {
         events.push(interfaceEventSchema.parse({ ...envelope, emission, kind: 'emission.appended' }))

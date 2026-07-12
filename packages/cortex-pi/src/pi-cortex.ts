@@ -7,7 +7,7 @@ import { actProposalResultSchema, canonicalHash, canonicalStringify, cortexInput
 import type { ActProposal, ActProposalResult, CortexInput, JsonValue } from '@nox/protocol'
 
 import type { PiModelConfig } from './model-config.js'
-import { resolvePiRunLimits } from './model-config.js'
+import { assertPiCortexReference, resolvePiRunLimits } from './model-config.js'
 import { ProposalRecorder } from './proposal-tool.js'
 
 export interface PiToolCallArtifact {
@@ -80,6 +80,32 @@ function describeDiagnostic(value: unknown): string {
   }
 }
 
+function redactText(value: string, sensitiveValues: ReadonlySet<string>): string {
+  let redacted = value
+  for (const sensitive of sensitiveValues) {
+    if (sensitive.length >= 4) {
+      redacted = redacted.replaceAll(sensitive, '[REDACTED]')
+    }
+  }
+  return redacted
+    .replace(/\bsk-(?:proj-|or-v1-)?[A-Za-z0-9_-]{16,}\b/g, '[REDACTED]')
+    .replace(/\b(Bearer\s+)[A-Za-z0-9._~+/-]{12,}/gi, '$1[REDACTED]')
+    .replace(/\b((?:api[_-]?key|access[_-]?token|authorization)\s*[:=]\s*)[^\s,;]+/gi, '$1[REDACTED]')
+}
+
+function redactUnknown(value: unknown, sensitiveValues: ReadonlySet<string>): unknown {
+  if (typeof value === 'string') {
+    return redactText(value, sensitiveValues)
+  }
+  if (Array.isArray(value)) {
+    return value.map(item => redactUnknown(item, sensitiveValues))
+  }
+  if (typeof value === 'object' && value !== null) {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redactUnknown(item, sensitiveValues)]))
+  }
+  return value
+}
+
 function combineSignal(
   parent: AbortSignal,
   timeoutMilliseconds: number
@@ -116,11 +142,8 @@ export class PiCortex {
 
   async runAct(inputValue: CortexInput, parentSignal: AbortSignal): Promise<ActProposalResult> {
     const input = cortexInputSchema.parse(inputValue)
-    if (input.cortex.modelId !== this.#options.model.id) {
-      throw new Error(
-        `CortexInput model ${input.cortex.modelId} does not match configured Pi model ${this.#options.model.id}`
-      )
-    }
+    assertPiCortexReference(input.cortex, this.#options.model)
+    const sensitiveValues = new Set(this.#options.sensitiveValues ?? [])
 
     const systemPrompt = this.#options.systemPrompt ?? DEFAULT_SYSTEM_PROMPT
     const userPrompt = canonicalStringify(input)
@@ -136,7 +159,7 @@ export class PiCortex {
 
     const artifact = async (): Promise<void> => {
       const proposalOutcome = recorder.outcome()
-      await this.#options.onArtifact?.({
+      const value: PiOperationalArtifact = {
         actId: input.actId,
         diagnostics,
         inputHash: canonicalHash(input),
@@ -159,7 +182,8 @@ export class PiCortex {
         ...(proposalOutcome?.kind === 'proposed' ? { proposal: proposalOutcome.proposal } : {}),
         systemPrompt,
         userPrompt
-      })
+      }
+      await this.#options.onArtifact?.(redactUnknown(value, sensitiveValues) as PiOperationalArtifact)
     }
 
     if (combined.signal.aborted) {
@@ -176,7 +200,17 @@ export class PiCortex {
     }
     const config: AgentLoopConfig = {
       convertToLlm: messages => messages as Message[],
-      ...(this.#options.getApiKey === undefined ? {} : { getApiKey: this.#options.getApiKey }),
+      ...(this.#options.getApiKey === undefined
+        ? {}
+        : {
+            getApiKey: async (provider: string) => {
+              const key = await this.#options.getApiKey?.(provider)
+              if (key !== undefined) {
+                sensitiveValues.add(key)
+              }
+              return key
+            }
+          }),
       maxRetries: 0,
       maxTokens: limits.maxOutputTokens,
       model: this.#options.model,
@@ -206,7 +240,7 @@ export class PiCortex {
       )
       finalAssistant ??= [...newMessages].reverse().find(isAssistantMessage)
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const message = redactText(error instanceof Error ? error.message : String(error), sensitiveValues)
       diagnostics.push(message.slice(0, 512))
       const result = actProposalResultSchema.parse(
         combined.signal.aborted
@@ -237,7 +271,7 @@ export class PiCortex {
         text: visibleText(finalAssistant).join('\n')
       }
     }
-    const parsed = actProposalResultSchema.parse(result)
+    const parsed = actProposalResultSchema.parse(redactUnknown(result, sensitiveValues))
     await artifact()
     return parsed
   }

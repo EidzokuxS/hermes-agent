@@ -3,11 +3,12 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { PiCortex, resolveBuiltinPiModel } from '@nox/cortex-pi'
+import { assertPiCortexReference, createPiCortexReference, PiCortex, resolveBuiltinPiModel } from '@nox/cortex-pi'
 import { canonicalHash, canonicalStringify, stateSnapshotSchema } from '@nox/protocol'
 import { createRuntime } from '@nox/runtime'
 import { SqliteStore } from '@nox/store-sqlite'
 
+import { startContinuationLoop } from './continuation-loop.js'
 import { createProcessHost } from './create-process-host.js'
 
 function argument(name: string, environmentName?: string): string {
@@ -34,13 +35,7 @@ async function main(): Promise<void> {
   const store = new SqliteStore(join(dataDirectory, 'nox.sqlite'), { now })
   const conceptText = readFileSync(join(process.cwd(), 'NOX-CONVERGENCE.md'), 'utf8')
   const foundationState = {
-    cortex: {
-      adapter: 'pi' as const,
-      configHash: canonicalHash({ api: model.api, id: model.id, provider: model.provider }),
-      cortexId: 'pi-primary',
-      modelId: model.id,
-      packageVersion: '0.80.6' as const
-    },
+    cortex: createPiCortexReference(model),
     identity: {
       conceptDocument: 'NOX-CONVERGENCE.md' as const,
       identityId: 'nox' as const,
@@ -80,15 +75,14 @@ async function main(): Promise<void> {
     }
     existing = await store.initialize(initialSnapshot)
   }
-  if (existing.state.cortex.modelId !== model.id) {
-    throw new Error(`Persisted Cortex model ${existing.state.cortex.modelId} does not match requested ${model.id}`)
-  }
+  assertPiCortexReference(existing.state.cortex, model)
+  const configuredApiKey = process.env.NOX_PI_API_KEY
   const cortex = new PiCortex({
-    ...(process.env.NOX_PI_API_KEY === undefined
+    ...(configuredApiKey === undefined
       ? {}
       : {
-          getApiKey: (requestedProvider: string) =>
-            requestedProvider === provider ? process.env.NOX_PI_API_KEY : undefined
+          getApiKey: (requestedProvider: string) => (requestedProvider === provider ? configuredApiKey : undefined),
+          sensitiveValues: [configuredApiKey]
         }),
     model,
     onArtifact: async artifact => {
@@ -114,9 +108,14 @@ async function main(): Promise<void> {
   })
   await runtime.recover()
   const host = await createProcessHost({ interfaceOwnerId, launchToken, runtime })
+  const continuationLoop = startContinuationLoop(runtime, {
+    onError: error =>
+      process.stderr.write(`Continuation loop failed: ${error instanceof Error ? error.message : String(error)}\n`)
+  })
   process.stdout.write(`${JSON.stringify({ port: host.port, protocolVersion: 1 })}\n`)
 
   const shutdown = async (): Promise<void> => {
+    await continuationLoop.stop()
     await host.close()
     store.close()
   }

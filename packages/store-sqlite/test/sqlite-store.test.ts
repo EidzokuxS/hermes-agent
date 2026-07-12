@@ -226,6 +226,30 @@ describe('SQLite foundation', () => {
     store.close()
   })
 
+  it('returns an explicit newest-first Journal tail without freezing at the oldest records', async () => {
+    let nextId = 0
+    const store = openStore(createPath(), {
+      idFactory: () => `record-tail-${(nextId += 1)}`,
+      now: () => at
+    })
+    await store.initialize(initialSnapshot())
+    await store.transact({
+      commandId: 'journal-tail-boundary',
+      expectedStateVersion: 0,
+      protocolVersion: 1,
+      records: Array.from({ length: 70 }, (_, index) =>
+        journal({ actId: `act-${index + 1}`, kind: 'act.cancel-requested', reason: `reason-${index + 1}` })
+      )
+    })
+
+    const tail: JournalRecord[] = []
+    for await (const record of store.readJournal({ limit: 64, order: 'descending' })) {
+      tail.push(record)
+    }
+    expect(tail.map(({ sequence }) => sequence)).toEqual(Array.from({ length: 64 }, (_, index) => 70 - index))
+    store.close()
+  })
+
   it('commits Journal and State atomically, then reopens at the exact cursor', async () => {
     const path = createPath()
     let nextId = 0

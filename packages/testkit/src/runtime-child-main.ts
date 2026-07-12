@@ -1,5 +1,6 @@
 /// <reference types="node" />
 
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { canonicalHash, stateSnapshotSchema } from '@nox/protocol'
@@ -203,6 +204,9 @@ async function main(): Promise<void> {
     launchToken: argument('launch-token', process.env.NOX_LAUNCH_TOKEN),
     runtime
   })
+  if (process.env.NOX_TEST_PID_FILE !== undefined) {
+    writeFileSync(process.env.NOX_TEST_PID_FILE, String(process.pid), 'utf8')
+  }
   process.stdout.write(`${JSON.stringify({ pid: process.pid, port: host.port, protocolVersion: 1 })}\n`)
 
   const shutdown = async (): Promise<void> => {

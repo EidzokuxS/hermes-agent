@@ -1,37 +1,24 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const productionRoots = [
-  'apps/desktop/electron',
-  'apps/desktop/src',
-  'apps/runtime/src',
-  'packages/cortex-pi/src',
-  'packages/interface-rpc/src',
-  'packages/protocol/src',
-  'packages/runtime/src',
-  'packages/store-sqlite/src'
+const entrypoints = [
+  'apps/desktop/electron/main.ts',
+  'apps/desktop/electron/preload.cts',
+  'apps/desktop/src/main.tsx',
+  'apps/runtime/src/main.ts',
+  'apps/audit/src/main.ts'
 ]
-const sourceExtensions = new Set(['.cts', '.js', '.mjs', '.ts', '.tsx'])
-
-async function filesBelow(relativeRoot) {
-  const absoluteRoot = path.join(root, relativeRoot)
-  const files = []
-  async function visit(directory) {
-    for (const entry of await readdir(directory, { withFileTypes: true })) {
-      const absolute = path.join(directory, entry.name)
-      if (entry.isDirectory()) {
-        if (!['dist', 'node_modules', 'test', 'tests'].includes(entry.name)) await visit(absolute)
-      } else if (sourceExtensions.has(path.extname(entry.name)) && !entry.name.includes('.test.')) {
-        files.push(absolute)
-      }
-    }
-  }
-  await visit(absoluteRoot)
-  return files
-}
+const workspacePackages = new Map([
+  ['@nox/cortex-pi', 'packages/cortex-pi/src/index.ts'],
+  ['@nox/interface-rpc', 'packages/interface-rpc/src/index.ts'],
+  ['@nox/protocol', 'packages/protocol/src/index.ts'],
+  ['@nox/runtime', 'packages/runtime/src/index.ts'],
+  ['@nox/store-sqlite', 'packages/store-sqlite/src/index.ts'],
+  ['@nox/testkit', 'packages/testkit/src/index.ts']
+])
 
 function relative(file) {
   return path.relative(root, file).replaceAll('\\', '/')
@@ -41,14 +28,73 @@ function digest(value) {
   return createHash('sha256').update(value).digest('hex')
 }
 
-export async function checkKillCriteria() {
-  const files = (await Promise.all(productionRoots.map(filesBelow))).flat().sort()
+async function exists(file) {
+  return Boolean(await stat(file).catch(() => undefined))
+}
+
+function importSpecifiers(source) {
+  const specifiers = []
+  const staticPattern = /(?:import|export)\s+(?:type\s+)?(?:[^'";]*?\s+from\s+)?['"]([^'"]+)['"]/g
+  const dynamicPattern = /import\(\s*['"]([^'"]+)['"]\s*\)/g
+  const requirePattern = /require\(\s*['"]([^'"]+)['"]\s*\)/g
+  for (const pattern of [staticPattern, dynamicPattern, requirePattern]) {
+    for (const match of source.matchAll(pattern)) {
+      if (match[1]) specifiers.push(match[1])
+    }
+  }
+  return [...new Set(specifiers)]
+}
+
+async function resolveInternal(importer, specifier) {
+  if (workspacePackages.has(specifier)) return path.join(root, workspacePackages.get(specifier))
+  if (!specifier.startsWith('.')) return undefined
+  const unresolved = path.resolve(path.dirname(importer), specifier)
+  const candidates = [unresolved]
+  if (specifier.endsWith('.js')) {
+    const stem = unresolved.slice(0, -3)
+    candidates.push(`${stem}.ts`, `${stem}.tsx`, `${stem}.cts`, `${stem}.mts`)
+  }
+  candidates.push(`${unresolved}.ts`, `${unresolved}.tsx`, `${unresolved}.cts`, path.join(unresolved, 'index.ts'))
+  for (const candidate of candidates) if (await exists(candidate)) return candidate
+  return null
+}
+
+async function traverseProductionGraph() {
+  const queue = entrypoints.map(file => path.join(root, file))
+  const visited = new Set()
   const sources = new Map()
-  for (const file of files) sources.set(file, await readFile(file, 'utf8'))
+  const edges = []
+  while (queue.length > 0) {
+    const file = queue.shift()
+    if (!file || visited.has(file)) continue
+    if (!(await exists(file))) {
+      edges.push({ from: '<entrypoint>', specifier: relative(file), status: 'missing' })
+      continue
+    }
+    visited.add(file)
+    const source = await readFile(file, 'utf8')
+    sources.set(file, source)
+    for (const specifier of importSpecifiers(source)) {
+      const resolved = await resolveInternal(file, specifier)
+      if (resolved === null) {
+        edges.push({ from: relative(file), specifier, status: 'unresolved-relative' })
+      } else if (resolved === undefined) {
+        edges.push({ from: relative(file), specifier, status: 'external' })
+      } else {
+        edges.push({ from: relative(file), specifier, status: 'internal', to: relative(resolved) })
+        queue.push(resolved)
+      }
+    }
+  }
+  return { edges, sources }
+}
+
+export async function checkKillCriteria() {
+  const { edges, sources } = await traverseProductionGraph()
   const matches = predicate =>
     [...sources].flatMap(([file, source]) => {
       const result = predicate(source, relative(file))
-      return result === undefined || result === false ? [] : [{ file: relative(file), evidence: String(result) }]
+      return result === undefined || result === false ? [] : [{ evidence: String(result), file: relative(file) }]
     })
 
   const rules = [
@@ -90,7 +136,11 @@ export async function checkKillCriteria() {
       id: 'single-production-sqlite-writer',
       matches: matches((source, file) =>
         /new\s+DatabaseSync\s*\(/.test(source) &&
-        !['packages/store-sqlite/src/audit-reader.ts', 'packages/store-sqlite/src/sqlite-store.ts'].includes(file)
+        ![
+          'apps/audit/src/raw-reader.ts',
+          'packages/store-sqlite/src/audit-reader.ts',
+          'packages/store-sqlite/src/sqlite-store.ts'
+        ].includes(file)
           ? 'additional production DatabaseSync constructor'
           : false
       )
@@ -102,33 +152,28 @@ export async function checkKillCriteria() {
           ? 'Pi import outside Cortex adapter'
           : false
       )
+    },
+    {
+      id: 'production-entrypoint-graph',
+      matches: edges
+        .filter(edge => edge.status === 'missing' || edge.status === 'unresolved-relative')
+        .map(edge => ({ evidence: `${edge.status}: ${edge.specifier}`, file: edge.from })),
+      pass: false
     }
   ].map(rule => ({ ...rule, pass: rule.matches.length === 0 }))
 
-  const requiredEdges = [
-    ['apps/desktop/electron/main.ts', './nox-runtime-process.js'],
-    ['apps/desktop/electron/nox-runtime-process.ts', '../../../runtime/dist/main.js'],
-    ['apps/runtime/src/main.ts', './create-process-host.js'],
-    ['apps/runtime/src/main.ts', '@nox/runtime'],
-    ['apps/runtime/src/create-process-host.ts', '@nox/interface-rpc']
-  ]
-  const edges = []
-  for (const [file, needle] of requiredEdges) {
-    const source = await readFile(path.join(root, file), 'utf8')
-    edges.push({ file, needle, present: source.includes(needle) })
-  }
-  rules.push({
-    id: 'production-entrypoint-graph',
-    matches: edges.filter(edge => !edge.present).map(edge => ({ file: edge.file, evidence: `missing ${edge.needle}` })),
-    pass: edges.every(edge => edge.present)
-  })
-
   return {
-    exclusions: ['**/dist/**', '**/test/**', '**/tests/**', 'packages/testkit/**'],
-    productionGraph: { edges, entrypoints: ['apps/desktop/electron/main.ts', 'apps/runtime/src/main.ts'] },
-    roots: productionRoots,
+    exclusions: ['node_modules/**', '**/dist/**'],
+    productionGraph: {
+      edges,
+      entrypoints,
+      reachableFiles: [...sources.keys()].map(relative).sort()
+    },
+    roots: entrypoints,
     rules,
-    sourceFiles: files.map(file => ({ path: relative(file), sha256: digest(sources.get(file)) })),
+    sourceFiles: [...sources]
+      .map(([file, source]) => ({ path: relative(file), sha256: digest(source) }))
+      .sort((left, right) => left.path.localeCompare(right.path)),
     status: rules.every(rule => rule.pass) ? 'pass' : 'fail'
   }
 }

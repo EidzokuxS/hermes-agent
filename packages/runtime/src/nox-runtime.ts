@@ -196,13 +196,7 @@ export class NoxRuntime {
   }
 
   async journal(afterSequence = 0): Promise<JournalRecord[]> {
-    return this.serialize(async () => {
-      const records: JournalRecord[] = []
-      for await (const record of this.#store.readJournal({ afterSequence, limit: 10_000 })) {
-        records.push(record)
-      }
-      return records
-    })
+    return this.serialize(() => this.#readAllJournal(afterSequence))
   }
 
   async snapshot(): Promise<StateSnapshot> {
@@ -255,11 +249,23 @@ export class NoxRuntime {
     })
   }
 
-  async #readAllJournal(): Promise<JournalRecord[]> {
+  async #readAllJournal(afterSequence = 0): Promise<JournalRecord[]> {
     const records: JournalRecord[] = []
-    for await (const record of this.#store.readJournal({ limit: 10_000 })) {
-      records.push(record)
+    let cursor = afterSequence
+    while (true) {
+      const page: JournalRecord[] = []
+      for await (const record of this.#store.readJournal({ afterSequence: cursor, limit: 10_000 })) {
+        page.push(record)
+      }
+      records.push(...page)
+      if (page.length < 10_000) {
+        return records
+      }
+      const last = page.at(-1)
+      if (last === undefined || last.sequence <= cursor) {
+        throw new Error('Journal pagination did not advance')
+      }
+      cursor = last.sequence
     }
-    return records
   }
 }

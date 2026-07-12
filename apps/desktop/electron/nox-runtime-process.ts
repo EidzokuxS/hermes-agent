@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -63,6 +63,12 @@ export async function launchNoxRuntime(options: LaunchNoxRuntimeOptions): Promis
       stdio: ['ignore', 'pipe', 'pipe']
     }
   )
+  if (process.env.NOX_DESKTOP_RUNTIME_PID_FILE !== undefined) {
+    if (child.pid === undefined) {
+      throw new Error('Nox runtime process has no PID')
+    }
+    await writeFile(process.env.NOX_DESKTOP_RUNTIME_PID_FILE, String(child.pid), 'utf8')
+  }
 
   const announcement = await new Promise<RuntimeAnnouncement>((resolve, reject) => {
     let stdout = ''
