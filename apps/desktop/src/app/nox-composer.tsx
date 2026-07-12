@@ -5,10 +5,12 @@ import { Textarea } from '../components/ui/textarea.js'
 
 export function NoxComposer({
   disabled,
-  onSubmit
+  onSubmit,
+  variant = 'default'
 }: {
   disabled: boolean
   onSubmit: (content: string) => Promise<void>
+  variant?: 'default' | 'hero'
 }) {
   const [content, setContent] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -28,7 +30,7 @@ export function NoxComposer({
     }
   }
   return (
-    <div className="composer-wrap">
+    <div className={`composer-wrap composer-wrap--${variant}`}>
       <div className="composer-kicker">
         <span>Message</span>
         <span>{content.length.toLocaleString()} / 65,536</span>

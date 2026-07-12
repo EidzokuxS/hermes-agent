@@ -71,32 +71,74 @@ export function NoxShell() {
         <StateVersion hash={view.stateHash} version={view.stateVersion} />
       </header>
       <main className="workspace">
-        <section className="field">
-          <div className="field-heading">
-            <div>
-              <span>Activity</span>
-              <h2>Messages and actions</h2>
-              <p>Everything Nox received, considered, and returned.</p>
-            </div>
-            <div className="activity-meta">
-              <span>{view.items.length === 1 ? '1 item' : `${view.items.length} items`}</span>
-              <code>Journal {view.journalCursor}</code>
-            </div>
-          </div>
+        <section className={`field${view.items.length === 0 ? ' field--empty' : ''}`}>
           {view.error && (
             <div className="connection-error" role="alert">
               {view.error}
             </div>
           )}
-          <div className="timeline-scroll">
-            <NoxTimeline
-              items={view.items}
-              onCancel={async actId => {
-                await cancelNoxAct(actId)
-              }}
-            />
-          </div>
-          <NoxComposer disabled={!view.connected} onSubmit={submit} />
+          {view.items.length === 0 ? (
+            <div className="empty-stage">
+              <div aria-hidden="true" className="presence-visual">
+                <span className="presence-orbit presence-orbit--outer" />
+                <span className="presence-orbit presence-orbit--inner" />
+                <strong>N</strong>
+                <i />
+              </div>
+              <div className="empty-stage__copy">
+                <span>{view.modelId || 'Nox'}</span>
+                <h2>Start with a message</h2>
+                <p>Share context, ask a question, or leave an idea. Nox decides what to do with it.</p>
+              </div>
+              <NoxComposer disabled={!view.connected} onSubmit={submit} variant="hero" />
+              <div aria-label="Possible outcomes" className="empty-capabilities">
+                <div>
+                  <span aria-hidden="true" className="codicon codicon-comment" />
+                  <p>
+                    <strong>Reply</strong>
+                    <small>Send a response</small>
+                  </p>
+                </div>
+                <div>
+                  <span aria-hidden="true" className="codicon codicon-save" />
+                  <p>
+                    <strong>Remember</strong>
+                    <small>Keep a durable change</small>
+                  </p>
+                </div>
+                <div>
+                  <span aria-hidden="true" className="codicon codicon-clock" />
+                  <p>
+                    <strong>Follow up</strong>
+                    <small>Return to it later</small>
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="field-heading">
+                <div>
+                  <span>Activity</span>
+                  <h2>Messages and actions</h2>
+                  <p>Everything Nox received, considered, and returned.</p>
+                </div>
+                <div className="activity-meta">
+                  <span>{view.items.length === 1 ? '1 item' : `${view.items.length} items`}</span>
+                  <code>Journal {view.journalCursor}</code>
+                </div>
+              </div>
+              <div className="timeline-scroll">
+                <NoxTimeline
+                  items={view.items}
+                  onCancel={async actId => {
+                    await cancelNoxAct(actId)
+                  }}
+                />
+              </div>
+              <NoxComposer disabled={!view.connected} onSubmit={submit} />
+            </>
+          )}
         </section>
         <aside className="causal-rail">
           <div className="rail-intro">
