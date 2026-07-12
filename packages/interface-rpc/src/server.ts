@@ -32,15 +32,22 @@ export interface RpcRuntimePort {
   unresolvedReceipts(interfaceOwnerId: string): Promise<EventReceipt[]>
 }
 
+export type RpcFaultStage =
+  | 'after-receipt-flush'
+  | 'after-receipt-queue'
+  | 'before-event-commit'
+  | 'before-receipt-queue'
+
 export interface OrderedConnection {
   close(code: number, reason: string): void
-  sendText(text: string): Promise<void>
+  sendText(text: string, onQueued?: () => void): Promise<void>
 }
 
 export interface RpcSessionOptions {
   connection: OrderedConnection
   interfaceOwnerId: string
   maxPendingFrames?: number
+  faultInjector?: (stage: RpcFaultStage) => void
   runtime: RpcRuntimePort
 }
 
@@ -158,6 +165,7 @@ async function buildView(runtime: RpcRuntimePort, interfaceOwnerId: string): Pro
 export class RpcSession {
   readonly #connection: OrderedConnection
   readonly #interfaceOwnerId: string
+  readonly #faultInjector: (stage: RpcFaultStage) => void
   readonly #maxPendingFrames: number
   readonly #runtime: RpcRuntimePort
   #pending = 0
@@ -166,6 +174,7 @@ export class RpcSession {
   constructor(options: RpcSessionOptions) {
     this.#connection = options.connection
     this.#interfaceOwnerId = options.interfaceOwnerId
+    this.#faultInjector = options.faultInjector ?? (() => undefined)
     this.#maxPendingFrames = options.maxPendingFrames ?? 256
     this.#runtime = options.runtime
   }
@@ -199,20 +208,24 @@ export class RpcSession {
 
     try {
       if (request.call.method === 'event.append') {
+        this.#faultInjector('before-event-commit')
         const receipt = await this.#runtime.appendEvent({
           clientEventId: request.call.params.clientEventId,
           content: request.call.params.content.content,
           format: request.call.params.content.format,
           interfaceOwnerId: this.#interfaceOwnerId
         })
+        this.#faultInjector('before-receipt-queue')
         await this.#connection.sendText(
           encodeFrame(
             successResponse(request.id, {
               protocolVersion: PROTOCOL_VERSION,
               receipt
             } as unknown as JsonValue)
-          )
+          ),
+          () => this.#faultInjector('after-receipt-queue')
         )
+        this.#faultInjector('after-receipt-flush')
         responseFlushed = true
         await this.#runtime.releaseEvent(receipt.eventId)
         return
@@ -272,6 +285,7 @@ function tokenMatches(header: string | undefined, token: string): boolean {
 }
 
 export interface NoxRpcServerOptions {
+  faultInjector?: (stage: RpcFaultStage) => void
   interfaceOwnerId: string
   launchToken: string
   port?: number
@@ -292,13 +306,15 @@ export class NoxRpcServer {
     this.#server.on('connection', socket => {
       const connection: OrderedConnection = {
         close: (code, reason) => socket.close(code, reason),
-        sendText: text =>
+        sendText: (text, onQueued) =>
           new Promise<void>((resolve, reject) => {
             socket.send(text, error => (error === undefined || error === null ? resolve() : reject(error)))
+            onQueued?.()
           })
       }
       const session = new RpcSession({
         connection,
+        ...(options.faultInjector === undefined ? {} : { faultInjector: options.faultInjector }),
         interfaceOwnerId: options.interfaceOwnerId,
         runtime: options.runtime
       })

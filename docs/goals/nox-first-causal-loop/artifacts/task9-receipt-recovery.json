@@ -1,0 +1,48 @@
+{
+  "protocolVersion": 1,
+  "generatedAt": "2026-07-12T10:00:00.000Z",
+  "matrix": [
+    {
+      "boundary": "before-event-commit",
+      "beforeRecovery": { "events": 0, "admissions": 0, "acts": 0 },
+      "afterRecovery": { "events": 1, "admissions": 1, "acts": 1, "terminals": 1 },
+      "receiptObserved": false
+    },
+    {
+      "boundary": "after-record-before-response",
+      "beforeRecovery": { "events": 1, "admissions": 0, "acts": 0 },
+      "afterRecovery": { "events": 1, "admissions": 1, "acts": 1, "terminals": 1 },
+      "receiptObserved": false
+    },
+    {
+      "boundary": "after-receipt-queue",
+      "beforeRecovery": { "events": 1, "admissions": 0, "acts": 0 },
+      "afterRecovery": { "events": 1, "admissions": 1, "acts": 1, "terminals": 1 },
+      "receiptObserved": "transport-race-allowed-before-sender-callback"
+    },
+    {
+      "boundary": "after-receipt-flush",
+      "beforeRecovery": { "events": 1, "admissions": 0, "acts": 0 },
+      "afterRecovery": { "events": 1, "admissions": 1, "acts": 1, "terminals": 1 },
+      "receiptObserved": true
+    },
+    {
+      "boundary": "after-admission-before-act",
+      "beforeRecovery": { "events": 1, "admissions": 1, "acts": 0 },
+      "afterRecovery": { "events": 1, "admissions": 1, "acts": 1, "terminals": 1 },
+      "receiptObserved": true
+    },
+    {
+      "boundary": "after-act-started",
+      "beforeRecovery": { "events": 1, "admissions": 1, "acts": 1, "terminals": 0 },
+      "afterRecovery": { "events": 1, "admissions": 1, "acts": 1, "terminals": 1 },
+      "receiptObserved": true
+    }
+  ],
+  "invariants": {
+    "admissionBeforeSenderFlush": 0,
+    "duplicateActsAfterRecovery": 0,
+    "duplicateAdmissionsAfterRecovery": 0,
+    "duplicateEventsAfterRecovery": 0
+  }
+}

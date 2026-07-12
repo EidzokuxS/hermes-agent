@@ -12,3 +12,4 @@ export {
 export type { RpcErrorData, RpcId, RpcNotification, RpcRequest, RpcResponse } from './frames.js'
 export { NoxRpcServer, projectInterfaceEvents, RpcSession } from './server.js'
 export type { NoxRpcServerOptions, OrderedConnection, RpcRuntimePort, RpcSessionOptions } from './server.js'
+export type { RpcFaultStage } from './server.js'

@@ -1,7 +1,9 @@
 import { NoxRpcServer } from '@nox/interface-rpc'
 import type { RpcRuntimePort } from '@nox/interface-rpc'
+import type { RpcFaultStage } from '@nox/interface-rpc'
 
 export interface ProcessHostOptions {
+  faultInjector?: (stage: RpcFaultStage) => void
   interfaceOwnerId: string
   launchToken: string
   runtime: RpcRuntimePort

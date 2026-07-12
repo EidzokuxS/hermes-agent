@@ -1,1 +1,6 @@
-export {}
+export { DeterministicClock } from './deterministic-clock.js'
+export type { CrashBoundary } from './runtime-child-main.js'
+export { startRuntimeChild } from './runtime-harness.js'
+export type { RuntimeChild, StartRuntimeChildOptions } from './runtime-harness.js'
+export { ScriptedCortex } from './scripted-cortex.js'
+export type { ScriptedCortexOptions, ScriptedScenario } from './scripted-cortex.js'

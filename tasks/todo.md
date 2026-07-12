@@ -129,7 +129,7 @@ Goal package создан в `docs/goals/nox-first-causal-loop`. Старый RP
 - [x] Task 6 — Nox JSON-RPC transport.
 - [x] Task 7 — Hermes-derived Desktop shell.
 - [x] Task 8 — Desktop projection and direct Nox cutover.
-- [ ] Task 9 — deterministic hard-restart proof.
+- [x] Task 9 — deterministic hard-restart proof.
 - [ ] Task 10 — evidence tooling and kill-criteria enforcement.
 - [ ] Task 11 — target-perspective acceptance with real Pi.
 
@@ -150,3 +150,5 @@ Task 5 завершён neutral runtime kernel: separate record/release, seriali
 Task 6 завершён одним authenticated loopback JSON-RPC transport: domain-only frames, incompatible-version rejection, ordered flush boundary, reconnect receipt handshake, cursor replay, bounded frame queue и neutral process host. Record/flush/release fault matrix и direct+reconnect integration записаны в `docs/architecture/rpc-transport-evidence.md`; 7 RPC tests и process-host integration прошли.
 
 Tasks 7–8 завершены одной Desktop-вертикалью. Зафиксированный Hermes allowlist материализован без donor backend/session imports; sandboxed `.cjs` preload, относительный Vite asset base и CSP доказаны запуском настоящего Electron process. Renderer показывает durable delivery до admission/Act, все terminal outcomes, emissions, State и Continuations. Для restart-проекции контракт `ViewSnapshot` минимально расширен bounded-массивами `acts` и `actTerminals`; Journal остаётся владельцем истины. Evidence и визуальные артефакты записаны в `docs/architecture/desktop-shell-evidence.md` и `docs/architecture/desktop-projection-evidence.md`; Desktop 6 test files / 9 tests, typecheck, build и actual Electron smoke прошли.
+
+Task 9 завершён process-level harness: test child импортирует тот же production `create-process-host` и использует тот же runtime/kernel/SQLite/RPC путь с заменой только CortexPort, ClockPort, deterministic IDs и fault StorePort. E1/A1/C1 переживает `SIGKILL`, новый PID запускает E2/A2 и достигает State v3; canonical trace, State и input hashes повторяемы. Six-boundary receipt matrix восстанавливается в один Event/admission/Act, cancellation fence и два malformed/rejected пути видны независимому audit reader. Evidence записан в `docs/architecture/runtime-restart-evidence.md`; `test:foundation` — 3 files / 11 tests, отдельный ten-run loop — 10/10 PASS. Literal `--runs 10` несовместим с pinned Vitest и документирован без изменения замороженного root manifest.
