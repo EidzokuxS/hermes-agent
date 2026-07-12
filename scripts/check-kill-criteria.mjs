@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -10,6 +10,16 @@ const entrypoints = [
   'apps/desktop/src/main.tsx',
   'apps/runtime/src/main.ts',
   'apps/audit/src/main.ts'
+]
+const scannedRoots = ['apps/*/src/**', 'apps/desktop/electron/**', 'packages/*/src/**']
+const declaredExclusions = [
+  'packages/testkit/**',
+  'tests/**',
+  '**/*.test.ts',
+  'docs/**',
+  'artifacts/**',
+  'docs/upstream/** (donor provenance manifests)',
+  'scripts/check-kill-criteria.mjs'
 ]
 const workspacePackages = new Map([
   ['@nox/cortex-pi', 'packages/cortex-pi/src/index.ts'],
@@ -89,8 +99,61 @@ async function traverseProductionGraph() {
   return { edges, sources }
 }
 
+async function visitFiles(directory, files) {
+  if (!(await exists(directory))) return
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const target = path.join(directory, entry.name)
+    if (entry.isDirectory()) await visitFiles(target, files)
+    else if (entry.isFile()) files.push(target)
+  }
+}
+
+function isDeclaredExcluded(file) {
+  return (
+    file.startsWith('packages/testkit/') ||
+    file.startsWith('tests/') ||
+    file.endsWith('.test.ts') ||
+    file.startsWith('docs/') ||
+    file.startsWith('artifacts/') ||
+    file === 'scripts/check-kill-criteria.mjs'
+  )
+}
+
+async function executableSourceScan(reachableFiles) {
+  const candidates = []
+  const appsDirectory = path.join(root, 'apps')
+  for (const app of await readdir(appsDirectory, { withFileTypes: true })) {
+    if (app.isDirectory()) await visitFiles(path.join(appsDirectory, app.name, 'src'), candidates)
+  }
+  await visitFiles(path.join(root, 'apps/desktop/electron'), candidates)
+  const packagesDirectory = path.join(root, 'packages')
+  for (const workspacePackage of await readdir(packagesDirectory, { withFileTypes: true })) {
+    if (workspacePackage.isDirectory()) {
+      await visitFiles(path.join(packagesDirectory, workspacePackage.name, 'src'), candidates)
+    }
+  }
+
+  const unique = [...new Set(candidates)].sort()
+  const excludedFiles = []
+  const sources = new Map()
+  for (const file of unique) {
+    const name = relative(file)
+    const excluded = isDeclaredExcluded(name)
+    if (excluded && !reachableFiles.has(file)) {
+      excludedFiles.push(name)
+      continue
+    }
+    sources.set(file, await readFile(file, 'utf8'))
+  }
+  for (const file of reachableFiles) {
+    if (!sources.has(file)) sources.set(file, await readFile(file, 'utf8'))
+  }
+  return { excludedFiles, sources }
+}
+
 export async function checkKillCriteria() {
-  const { edges, sources } = await traverseProductionGraph()
+  const { edges, sources: reachableSources } = await traverseProductionGraph()
+  const { excludedFiles, sources } = await executableSourceScan(new Set(reachableSources.keys()))
   const matches = predicate =>
     [...sources].flatMap(([file, source]) => {
       const result = predicate(source, relative(file))
@@ -160,20 +223,27 @@ export async function checkKillCriteria() {
         .map(edge => ({ evidence: `${edge.status}: ${edge.specifier}`, file: edge.from })),
       pass: false
     }
-  ].map(rule => ({ ...rule, pass: rule.matches.length === 0 }))
+  ].map(rule => ({ ...rule, count: rule.matches.length, pass: rule.matches.length === 0 }))
 
   return {
-    exclusions: ['node_modules/**', '**/dist/**'],
+    entrypoints,
+    exclusions: declaredExclusions,
     productionGraph: {
       edges,
       entrypoints,
-      reachableFiles: [...sources.keys()].map(relative).sort()
+      reachableFiles: [...reachableSources.keys()].map(relative).sort()
     },
     roots: entrypoints,
+    scannedRoots,
     rules,
     sourceFiles: [...sources]
       .map(([file, source]) => ({ path: relative(file), sha256: digest(source) }))
       .sort((left, right) => left.path.localeCompare(right.path)),
+    textScan: {
+      excludedFiles,
+      files: [...sources.keys()].map(relative).sort(),
+      scannedRoots
+    },
     status: rules.every(rule => rule.pass) ? 'pass' : 'fail'
   }
 }
