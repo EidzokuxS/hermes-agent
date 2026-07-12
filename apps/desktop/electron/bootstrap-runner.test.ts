@@ -5,6 +5,7 @@ import path from 'node:path'
 import test from 'node:test'
 
 import {
+  buildPowerShellSpawnEnv,
   buildPinArgs,
   buildPosixPinArgs,
   cachedScriptPath,
@@ -19,6 +20,26 @@ const SCRIPT_NAME = process.platform === 'win32' ? 'install.ps1' : 'install.sh'
 function mkTmpHome() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'hermes-bootstrap-test-'))
 }
+
+test('Windows PowerShell spawn drops a PowerShell 7 module path', () => {
+  const env = buildPowerShellSpawnEnv('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe', 'C:\\Hermes', {
+    Path: 'C:\\Windows',
+    PSModulePath: 'C:\\Program Files\\PowerShell\\7\\Modules',
+    pSmOdUlEpAtH: 'duplicate-case-variant'
+  })
+
+  assert.equal(env.HERMES_HOME, 'C:\\Hermes')
+  assert.equal(env.Path, 'C:\\Windows')
+  assert.equal(Object.keys(env).some(key => key.toLowerCase() === 'psmodulepath'), false)
+})
+
+test('PowerShell 7 spawn preserves its compatible module path', () => {
+  const env = buildPowerShellSpawnEnv('C:\\Program Files\\PowerShell\\7\\pwsh.exe', 'C:\\Hermes', {
+    PSModulePath: 'C:\\Program Files\\PowerShell\\7\\Modules'
+  })
+
+  assert.equal(env.PSModulePath, 'C:\\Program Files\\PowerShell\\7\\Modules')
+})
 
 test('runBootstrap bails immediately when the signal is already aborted', async () => {
   const controller = new AbortController()

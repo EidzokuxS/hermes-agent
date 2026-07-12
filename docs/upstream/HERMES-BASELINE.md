@@ -79,7 +79,7 @@ The first clean packaged boot exposed two real foundation seams and led to bound
 1. Nox build SHAs did not exist in the donor repository, so bootstrap and update provenance now point to the synchronized Nox fork while donor provenance stays immutable (`D-005`).
 2. The complete Hermes tree exceeded Windows `MAX_PATH` under the managed app-data root. The installer now enables `core.longpaths=true` before every repository probe/clone, uses fork ZIPs and force-replaces archive payload only on the fresh checkout path (`D-006`). Existing-checkout updates retain stash/restore behavior.
 
-An ordinary `%LOCALAPPDATA%\hermes` launch later exposed a transient third seam: Astral's installer returned once without producing the managed `uv.exe`. The exact stage succeeded immediately on retry. The pinned installer now makes at most two attempts, uses `UV_NO_MODIFY_PATH=1`, records the child exit code and restores its environment (`D-009`). A real isolated uv stage and the normal Desktop bootstrap both complete after the change; no arbitrary host uv is accepted.
+An ordinary `%LOCALAPPDATA%\hermes` launch later exposed a third seam: Electron inherited PowerShell 7's `PSModulePath` and passed it to Windows PowerShell 5.1, which selected an incompatible `Microsoft.PowerShell.Security` module before Astral's installer could run. Desktop now omits `PSModulePath` only for `powershell.exe`, allowing version-correct defaults while preserving it for `pwsh.exe`. The pinned installer also makes at most two attempts, uses `UV_NO_MODIFY_PATH=1`, retains the last child diagnostics and restores its environment (`D-009`). No arbitrary host uv is accepted.
 
 At commit `7c87c4781194fc03013d584ab95ee0f45313f4c8` the packaged Desktop then proved:
 

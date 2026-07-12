@@ -473,8 +473,11 @@ function Install-Uv {
         # PowerShell 7 / pwsh-only setups.
         $psHostExe = Get-PowerShellHostExe
         $uvInstallerExitCode = $null
+        $uvInstallerOutput = @()
         foreach ($attempt in 1..2) {
-            & $psHostExe -NoProfile -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex" 2>&1 | Out-Null
+            $uvInstallerOutput = @(
+                & $psHostExe -NoProfile -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex" 2>&1
+            )
             $uvInstallerExitCode = $LASTEXITCODE
 
             if (Test-Path $managedUv) {
@@ -490,6 +493,10 @@ function Install-Uv {
             }
         }
 
+        foreach ($line in @($uvInstallerOutput | Select-Object -Last 8)) {
+            $message = "$line".Trim()
+            if ($message) { Write-Warn "uv installer: $message" }
+        }
         Write-Err "uv installer exited $uvInstallerExitCode but did not create $managedUv"
         Write-Info "Install manually: https://docs.astral.sh/uv/getting-started/installation/"
         return $false

@@ -83,6 +83,8 @@ def test_managed_uv_install_is_bounded_and_retryable() -> None:
     assert 'foreach ($attempt in 1..2)' in body
     assert '$env:UV_NO_MODIFY_PATH = "1"' in body
     assert '$uvInstallerExitCode = $LASTEXITCODE' in body
+    assert '$uvInstallerOutput = @(' in body
+    assert 'Write-Warn "uv installer: $message"' in body
     assert 'if (Test-Path $managedUv)' in body
     assert '$env:UV_INSTALL_DIR = $previousInstallDir' in body
     assert '$env:UV_NO_MODIFY_PATH = $previousNoModifyPath' in body

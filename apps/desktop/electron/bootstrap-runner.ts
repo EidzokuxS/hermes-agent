@@ -344,6 +344,31 @@ function resolveWindowsPowerShell() {
   return 'powershell.exe'
 }
 
+function buildPowerShellSpawnEnv(ps, hermesHome, sourceEnv = process.env) {
+  const env = {
+    ...sourceEnv,
+    // Pass HERMES_HOME through so install.ps1 respects the caller's
+    // choice rather than re-computing the default.
+    HERMES_HOME: hermesHome || sourceEnv.HERMES_HOME || ''
+  }
+
+  // Node inherits PSModulePath verbatim. When Desktop itself is launched
+  // from PowerShell 7, that value puts PS7 modules before Windows PowerShell
+  // 5.1's inbox modules. A spawned powershell.exe can then try to load the
+  // incompatible PS7 Microsoft.PowerShell.Security module and fail before
+  // Astral's installer runs. Omitting the variable lets powershell.exe build
+  // its own version-correct default module path, matching a direct invocation.
+  if (path.basename(ps).toLowerCase() === 'powershell.exe') {
+    for (const key of Object.keys(env)) {
+      if (key.toLowerCase() === 'psmodulepath') {
+        delete env[key]
+      }
+    }
+  }
+
+  return env
+}
+
 function spawnPowerShell(scriptPath, args, { emit, stageName, abortSignal, hermesHome }: any = {}) {
   return new Promise<any>((resolve, reject) => {
     const ps = process.platform === 'win32' ? resolveWindowsPowerShell() : 'pwsh'
@@ -354,12 +379,7 @@ function spawnPowerShell(scriptPath, args, { emit, stageName, abortSignal, herme
       fullArgs,
       hiddenWindowsChildOptions({
         stdio: ['ignore', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          // Pass HERMES_HOME through so install.ps1 respects the caller's
-          // choice rather than re-computing the default.
-          HERMES_HOME: hermesHome || process.env.HERMES_HOME || ''
-        }
+        env: buildPowerShellSpawnEnv(ps, hermesHome)
       })
     )
 
@@ -892,6 +912,7 @@ async function runBootstrap(opts) {
 }
 
 export {
+  buildPowerShellSpawnEnv,
   buildPinArgs,
   buildPosixPinArgs,
   cachedScriptPath,
