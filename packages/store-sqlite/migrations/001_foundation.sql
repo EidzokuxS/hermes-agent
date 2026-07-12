@@ -50,6 +50,14 @@ CREATE TABLE audit_blobs (
   created_at TEXT NOT NULL
 ) STRICT;
 
+CREATE TABLE audit_blob_provenance (
+  content_hash TEXT NOT NULL REFERENCES audit_blobs(content_hash),
+  provenance_hash TEXT NOT NULL,
+  provenance_json TEXT NOT NULL CHECK (json_valid(provenance_json)),
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (content_hash, provenance_hash)
+) WITHOUT ROWID, STRICT;
+
 CREATE TABLE external_event_receipts (
   interface_owner_id TEXT NOT NULL,
   client_event_id TEXT NOT NULL,
@@ -124,6 +132,18 @@ CREATE TRIGGER audit_blobs_no_delete
 BEFORE DELETE ON audit_blobs
 BEGIN
   SELECT RAISE(ABORT, 'audit_blobs is append-only');
+END;
+
+CREATE TRIGGER audit_blob_provenance_no_update
+BEFORE UPDATE ON audit_blob_provenance
+BEGIN
+  SELECT RAISE(ABORT, 'audit_blob_provenance is append-only');
+END;
+
+CREATE TRIGGER audit_blob_provenance_no_delete
+BEFORE DELETE ON audit_blob_provenance
+BEGIN
+  SELECT RAISE(ABORT, 'audit_blob_provenance is append-only');
 END;
 
 CREATE TRIGGER external_event_receipts_no_update

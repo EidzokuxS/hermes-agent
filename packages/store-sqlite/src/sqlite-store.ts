@@ -68,6 +68,17 @@ function digestBytes(bytes: Uint8Array): string {
   return `sha256:${createHash('sha256').update(bytes).digest('hex')}`
 }
 
+function externalEventIdentityHash(event: ExternalEvent): string {
+  return canonicalHash({
+    clientEventId: event.clientEventId,
+    content: event.content,
+    eventId: event.eventId,
+    interfaceOwnerId: event.interfaceOwnerId,
+    kind: event.kind,
+    protocolVersion: event.protocolVersion
+  })
+}
+
 export class SqliteStore {
   readonly #database: DatabaseSync
   readonly #faultInjector: (stage: FaultStage) => void
@@ -280,7 +291,7 @@ export class SqliteStore {
     if (event.admission !== 'recorded') {
       throw new Error('External Event ingress must begin in recorded admission state')
     }
-    const eventHash = canonicalHash(event)
+    const eventHash = externalEventIdentityHash(event)
     const existing = this.#readExternalReceipt(event.interfaceOwnerId, event.clientEventId, eventHash)
     if (existing !== undefined) {
       return existing
@@ -348,10 +359,17 @@ export class SqliteStore {
     if (stored === undefined) {
       throw new Error('Audit blob insert did not produce a readable blob')
     }
-    if (stored.mediaType !== input.mediaType || canonicalHash(stored.provenance) !== canonicalHash(provenance)) {
-      throw new Error('Content hash collision with incompatible audit metadata')
+    if (stored.mediaType !== input.mediaType) {
+      throw new Error('Content hash collision with incompatible audit media type')
     }
-    return stored
+    this.#database
+      .prepare(
+        `INSERT OR IGNORE INTO audit_blob_provenance(
+          content_hash, provenance_hash, provenance_json, created_at
+        ) VALUES (?, ?, ?, ?)`
+      )
+      .run(contentHash, canonicalHash(provenance), canonicalStringify(provenance), input.createdAt)
+    return { ...stored, provenance }
   }
 
   async getAuditBlob(contentHash: string): Promise<AuditBlob | undefined> {
@@ -464,7 +482,7 @@ export class SqliteStore {
           event.interfaceOwnerId,
           event.clientEventId,
           event.eventId,
-          canonicalHash(event),
+          externalEventIdentityHash(event),
           canonicalStringify(event),
           record.sequence,
           canonicalStringify(receipt)

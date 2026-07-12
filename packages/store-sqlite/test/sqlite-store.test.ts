@@ -469,4 +469,34 @@ describe('SQLite foundation', () => {
     )
     database.close()
   })
+
+  it('keeps multiple provenance links for identical content-addressed bytes', async () => {
+    const path = createPath()
+    const store = openStore(path, { now: () => at })
+    await store.initialize(initialSnapshot())
+    const bytes = Uint8Array.from([9, 8, 7])
+    const first = await store.putAuditBlob({
+      bytes,
+      createdAt: at,
+      mediaType: 'application/octet-stream',
+      provenance: runtimeProvenance
+    })
+    const second = await store.putAuditBlob({
+      bytes,
+      createdAt: at,
+      mediaType: 'application/octet-stream',
+      provenance: {
+        actId: 'act-001',
+        cortexId: 'pi-primary',
+        kind: 'cortex',
+        modelId: 'test-model'
+      }
+    })
+    expect(second.contentHash).toBe(first.contentHash)
+    store.close()
+
+    const audit = new SqliteAuditReader(path)
+    expect(audit.getAuditBlobProvenances(first.contentHash)).toHaveLength(2)
+    audit.close()
+  })
 })

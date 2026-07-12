@@ -201,6 +201,17 @@ export class SqliteAuditReader {
     }
   }
 
+  getAuditBlobProvenances(contentHash: string): Provenance[] {
+    this.#assertOpen()
+    const rows = this.#database
+      .prepare(
+        `SELECT provenance_json FROM audit_blob_provenance
+         WHERE content_hash = ? ORDER BY provenance_hash`
+      )
+      .all(contentHash) as unknown as Array<{ provenance_json: string }>
+    return rows.map(({ provenance_json }) => provenanceSchema.parse(parseJson(provenance_json)))
+  }
+
   integrityCheck(): string {
     this.#assertOpen()
     const row = this.#database.prepare('PRAGMA integrity_check').get() as Record<string, string>

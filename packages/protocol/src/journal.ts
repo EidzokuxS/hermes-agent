@@ -54,7 +54,8 @@ const proposalObservedEntrySchema = z
   .object({
     actId: boundedIdSchema,
     kind: z.literal('act.proposal-observed'),
-    result: actProposalResultSchema
+    result: actProposalResultSchema,
+    resultBlobHash: contentHashSchema
   })
   .strict()
 

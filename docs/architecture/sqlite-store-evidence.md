@@ -5,7 +5,7 @@ Captured at `2026-07-12T08:56:54.699Z` for Task 2 of the accepted first-causal-l
 ## Runtime and schema
 
 - Runtime: Node `24.18.0`, built-in `node:sqlite`, SQLite `3.53.1`.
-- Migration: `001_foundation`, canonical checksum `sha256:592669cd03c678c8339147cda9860fd143c833fbd4710f2051a7cfd60acc58bc`.
+- Migration: `001_foundation`, canonical checksum `sha256:21cfc4ddda7546e4c79378be8237fe6b37933d8f002a048b69fcb2cc6a69b1a6`.
 - Connection proof: `journal_mode=wal`, `synchronous=2` (`FULL`), `foreign_keys=1`, `trusted_schema=0`; defensive mode and a 5-second busy timeout are enabled in the constructor.
 - Tables are `STRICT`; all JSON columns have database-level `json_valid` checks.
 - Journal records, State snapshots, audit blobs, migration identities, external receipts, admissions, continuation fires, and commit receipts have update/delete guards. `state_head` alone is mutable and has a monotonic `+1` trigger.
@@ -31,10 +31,11 @@ The unfaulted command atomically wrote three Journal records, advanced State fro
 - A stale expected State version was rejected before writes.
 - Direct update/delete attempts against Journal, snapshots, blobs, and migration history were rejected by SQLite triggers.
 - A rejected Effect remained in the Journal without a new snapshot. After a WAL checkpoint and SQLite Backup API copy, the independent read-only auditor reported `integrity_check=ok` and found the rejected decision.
+- Identical content bytes may carry multiple append-only provenance links without duplicating the content-addressed blob or conflating its causal origins.
 
 ## Verification
 
-- `npm run test --workspace @nox/store-sqlite`: 1 file, 10 tests passed.
+- `npm run test --workspace @nox/store-sqlite`: 1 file, 11 tests passed.
 - `npm run typecheck --workspace @nox/store-sqlite`: passed.
 - `npm run build --workspace @nox/store-sqlite`: passed with declarations.
 - Root test gate after integration: protocol and SQLite projects pass together.

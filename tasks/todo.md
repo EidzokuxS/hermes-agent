@@ -125,7 +125,7 @@ Goal package создан в `docs/goals/nox-first-causal-loop`. Старый RP
 - [x] Task 2 — SQLite Journal, snapshots and independent reader.
 - [x] Task 3 — deterministic State transition and input assembly.
 - [x] Task 4 — Pi CortexPort and proposal fence.
-- [ ] Task 5 — runtime kernel, Continuation and recovery.
+- [x] Task 5 — runtime kernel, Continuation and recovery.
 - [ ] Task 6 — Nox JSON-RPC transport.
 - [ ] Task 7 — Hermes-derived Desktop shell.
 - [ ] Task 8 — Desktop projection and direct Nox cutover.
@@ -144,3 +144,5 @@ Task 2 завершён одним `node:sqlite` writer и независимы�
 Task 3 завершён pure reducer и deterministic CortexInput builder. Shared strict input contract добавлен в `@nox/protocol`, чтобы runtime и Pi зависели от одной границы без reverse dependency. Six-permutation Effect test, immutable JSON Pointer transitions, conditional State versioning, transcript exclusion, observed-time semantics и locked cross-process hash записаны в `docs/architecture/runtime-pure-evidence.md`; 11 runtime tests и protocol regressions прошли.
 
 Task 4 завершён bounded Pi CortexPort: fresh low-level AgentContext, один provider turn, единственный schema-bound terminal `propose_act`, composed abort/timeout, token cap, zero hidden retry и operational artifact без thinking/credentials. Семь outcome-классов, fresh-context proof, model fence и direct dependency graph записаны в `docs/architecture/pi-cortex-evidence.md`; 9 focused tests, package build/typecheck и strict live-skeleton check прошли.
+
+Task 5 завершён neutral runtime kernel: separate record/release, serialized commit authority, persisted input/ActStarted before Cortex, atomic proposal/decision/State/terminal settlement, cancellation fence, due Continuation fire и startup recovery. Ordered traces, six-path version matrix, late-output race, interrupted/quarantined recovery и single-fire continuation proof записаны в `docs/architecture/runtime-kernel-evidence.md`; 21 runtime tests и 11 store tests прошли на реальном SQLite.
