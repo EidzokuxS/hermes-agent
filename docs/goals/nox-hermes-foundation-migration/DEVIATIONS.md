@@ -54,3 +54,12 @@
 - **Decision:** Inject `core.longpaths=true` into every Git invocation before repository probes or clone, persist it globally and per managed checkout, use the Nox fork for ZIP archives, and force only the post-download checkout path that operates on a fresh clone/ZIP payload. The existing-install update path remains non-destructive and keeps its stash/restore contract.
 - **Why this preserves intent:** Hermes' complete source tree remains installable under the real Windows `%LOCALAPPDATA%` depth without dropping localized files or weakening the managed-update data-preservation path.
 - **Rollback:** Remove the compatibility setting only if the full upstream tree no longer exceeds Windows path limits at every supported install root; retain the fresh ZIP checkout distinction.
+
+## D-007 — Long-path test reflects PowerShell string coercion
+
+- **Recorded:** 2026-07-12
+- **Plan location:** Task 0, Windows installer regression validation.
+- **Evidence:** `ConvertTo-LongPath` declares `[string]$Path`, so PowerShell normalizes a null argument to the empty string before the function body. The test instead passed null into a mandatory assertion parameter and aborted during binding.
+- **Decision:** Assert the observable string contract: null input normalizes to an empty string. The production helper is unchanged.
+- **Why this preserves intent:** The test now exercises the helper's actual typed PowerShell boundary rather than failing inside its own assertion harness.
+- **Rollback:** Change the expectation only if the production parameter type or null-normalization contract changes.

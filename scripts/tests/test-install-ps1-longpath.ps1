@@ -61,7 +61,7 @@ Write-Host ""
 Write-Host "-- ConvertTo-LongPath --"
 
 Assert-Equal -Expected "" -Actual (ConvertTo-LongPath "") -Label "empty string returns empty"
-Assert-Equal -Expected $null -Actual (ConvertTo-LongPath $null) -Label "null returns null"
+Assert-Equal -Expected "" -Actual (ConvertTo-LongPath $null) -Label "null string input normalizes to empty"
 
 # No 8.3 component -> returned verbatim (even with spaces).
 $longish = "C:\Users\First Last\AppData\Local\Temp"
