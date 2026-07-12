@@ -1,78 +1,60 @@
-# Nox Repository Guide
+# Nox on Hermes Repository Guide
 
 ## Authority
 
-- Treat `NOX-CONVERGENCE.md` as the read-only conceptual source of truth.
-- Treat `docs/goals/nox-first-causal-loop/PLAN.md` as the execution contract for the active foundation goal.
-- Treat `packages/protocol` as the executable schema authority.
-- Treat the SQLite Journal as causal and audit truth; treat snapshots, UI stores, transcripts, and model messages as projections.
-- Keep `NOX-RETHINK.md` and `REFERENCE ONLY/` closed to reading, searching, editing, and implementation imports.
+- Treat `docs/goals/nox-hermes-foundation-migration/PLAN.md` and its accepted SHA-256 as the active execution contract.
+- Treat `NOX-CONVERGENCE.md` as read-only conceptual truth.
+- Do not read, search, edit, import, or derive implementation from `NOX-RETHINK.md` or `REFERENCE ONLY/**`.
+- Do not integrate a Nox identity until the user separately accepts the exact revision hash of `identity/NOX-MASK.md`.
+- Treat the pinned full Hermes Agent tree as the product foundation, not as a donor slice.
 
-## Ownership
+## Production ownership
 
-- Let `packages/runtime` validate every proposal and own every State transition.
-- Let `packages/store-sqlite` persist only commands accepted by runtime.
-- Keep `packages/cortex-pi` proposal-only; expose zero state-changing Pi tools.
-- Keep `packages/interface-rpc` as the sole transport vocabulary.
-- Keep Electron main as the socket and launch-token owner; expose only typed Nox domain methods through preload.
-- Keep `apps/desktop/src/store/nox-view.ts` rebuildable from snapshot plus Journal cursor.
-- Keep `apps/audit` read-only and independent from the runtime reducer and Desktop projection.
-- Keep `packages/testkit` unreachable from every production entrypoint.
+- Keep one production Desktop: `apps/desktop`.
+- Keep one production model/tool loop: the Hermes Python backend reached through `hermes serve` / `hermes_cli.main serve`.
+- Keep Hermes `state.db` authoritative for operational sessions, messages, model calls, tool calls, tool results, configuration, and loop state.
+- Let the Nox Journal own only Nox causal/provenance records and constitutional State. Record Hermes outcomes as observed, never as authored by the Journal.
+- Treat Desktop stores, transcripts, snapshots, and evidence as projections rather than competing truth stores.
+- Keep Electron main as the local-backend process owner. Renderer and preload must use typed Hermes surfaces; they must not spawn a second runtime.
+- Keep `apps/runtime`, `apps/audit`, and `packages/{cortex-pi,interface-rpc,protocol,runtime,store-sqlite,testkit}` outside production workspaces and entrypoint graphs until the accepted plan explicitly transfers a bounded responsibility.
+- Keep `packages/testkit` unreachable from production entrypoints.
 
-## Donor boundaries
+## Hermes invariants
 
-- Pin Pi to commit `8479bd84743e8889f728acb21a62794102db0529` and packages `0.80.6`.
-- Pin Hermes Desktop to commit `4281151ae859241351ba14d8c7682dc67ff4c126` and version `0.17.0`.
-- Copy only files allowlisted in `docs/upstream/hermes-desktop-slice.json`.
-- Preserve donor provenance in `THIRD_PARTY_NOTICES.md` and the allowlist manifest.
-- Exclude Hermes backend, gateway, sessions, tasks, model management, tools, updates, git/worktree features, installers, and brand assets.
-- Exclude Pi coding-agent, session shell, persistence, follow-up queues, and steering queues.
+- Preserve the Hermes agent, gateway, session, tool, memory, provider, updater, installer, and Desktop feature baseline unless a documented Nox invariant requires a bounded change.
+- Preserve prompt-cache stability: keep the cacheable system prefix byte-stable within a conversation and put volatile context after stable prompt tiers.
+- Keep canonical Nox identity in a stable, versioned prompt tier. Treat profile `SOUL.md`, memory, skills, and project context as additive layers.
+- Keep model proposals separate from harness authorization, execution, persistence, and observation.
+- Give every tool call a structured result, including denial, timeout, cancellation, and failure.
+- Keep behavior and secrets separate: `config.yaml` owns behavior; `.env` owns credentials.
+- Preserve strict message alternation and do not synthesize user messages inside the model/tool loop.
 
-## Runtime invariants
+## TypeScript and Desktop style
 
-- Record an external Event durably before admission.
-- Flush its receipt before `EventAdmitted` and `ActStarted`.
-- Keep unresolved external Events quarantined until receipt recovery completes.
-- Advance State version only through an accepted State-changing Effect.
-- Record rejected Effects, cancellation, failures, interruption, and explicit silence in the Journal.
-- Make Continuations visible, bounded, cancellable, single-fire, and provenance-marked.
-- Inject clocks and cortex ports; keep deterministic fakes in testkit.
-- Store operational model inputs and outputs without hidden reasoning or credentials.
+- Follow Hermes conventions already present in the touched module before adding a new abstraction.
+- Use nanostores for shared renderer state and keep atoms near their owning feature.
+- Keep route roots and composition roots thin; colocate focused hooks and actions with their owner.
+- Prefer `interface` for public object props, type-only imports where applicable, named exports, and `void` event handlers.
+- Keep imports, exports, and JSX props naturally sorted.
+- Use one primitive per concern, tokens over literals, and flat grouping over nested cards.
+- Use CSS variables for theme values, short functional motion, and `prefers-reduced-motion` support.
+- Keep user-visible strings in the existing Hermes localization boundary until the accepted Nox product layer deliberately changes it.
 
-## TypeScript style
+## Tests and evidence
 
-- Use strict ESM TypeScript and narrow discriminated unions at every boundary.
-- Validate external and model-originated data with runtime schemas before use.
-- Prefer `interface` for public object contracts and `type` for unions and mapped forms.
-- Use named exports and package public entrypoints; avoid cross-package deep imports.
-- Keep imports, named imports, named exports, and JSX props naturally sorted.
-- Use type-only imports where applicable and remove unused imports.
-- Keep route roots and composition roots thin; colocate focused actions with their owner.
-- Use injected IDs, time, and ports in deterministic logic.
-
-## Desktop style
-
-- Follow Hermes' design rule: one source per concern, tokens over literals, flat over boxed.
-- Reuse one primitive per concern; keep variants and sizing inside primitives.
-- Use CSS variables for color, stroke, shadow, and theme values.
-- Use whitespace and one hairline for grouping; avoid nested cards and gratuitous dividers.
-- Keep functional motion short and respect `prefers-reduced-motion`.
-- Keep user-visible strings in the Nox-owned localization boundary once that boundary exists.
-
-## Commands
-
-- Use Node `24.18.0` from `.node-version`.
-- Install with `npm ci` after `package-lock.json` exists.
-- Run `npm run node:check`, `npm run lint`, `npm run typecheck`, and `npm run test` for the baseline gate.
-- Run focused workspace scripts before root-wide validation.
-- Run `npm run test:foundation` for deterministic continuity.
-- Run `npm run check:kill-criteria` before any completion claim.
-- Capture target-perspective proof with `npm run evidence:first-loop` and verify it with `npm run verify:first-loop`.
+- Prefer behavior-contract tests over source snapshots or broad change detectors.
+- Use temporary `HERMES_HOME` values for tests; never write into the user's real profile.
+- Run the production fence with `.venv\Scripts\python.exe -m pytest tests\nox\test_production_graph.py` on Windows.
+- Run Desktop platform tests with `npm run test:desktop:platforms --workspace apps/desktop`.
+- Run Desktop typecheck with `npm run typecheck --workspace apps/desktop`.
+- Use `scripts/run_tests_parallel.py` for the full Python denominator; on Windows follow the native UTF-8 invocation recorded in `docs/upstream/HERMES-BASELINE.md`.
+- Capture packaged target-perspective evidence for acceptance claims. Say `implemented but unproven` whenever required mask, restart-correlation, parity, or displaced-path evidence is absent.
+- Keep `artifacts/evidence/hermes-foundation/task1/production-graph-baseline.json` synchronized through `tests/nox/test_production_graph.py --write-baseline` when an accepted production-graph change occurs.
 
 ## Change discipline
 
 - Preserve unrelated and pre-existing work.
-- Keep root manifests and `package-lock.json` fixed after Task 0 unless the accepted plan is revised.
-- Update `tasks/todo.md` after each task gate.
-- Record deviations from the accepted plan before implementing them.
-- Call the result `implemented but unproven` whenever required evidence is missing.
+- Keep the pinned donor provenance, root dependency manifests, and lockfiles unchanged unless the accepted plan requires a recorded deviation.
+- Record deviations before implementing them and update `tasks/todo.md` after each task gate.
+- Do not retain compatibility routes to the displaced custom Desktop/runtime without a verified contract.
+- At cutover, delete or explicitly demote displaced production paths; source retention alone must never imply production reachability.

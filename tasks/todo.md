@@ -189,7 +189,7 @@ Goal package создан в `docs/goals/nox-hermes-foundation-migration`. Пл�
 ## Execution: переезд на Hermes Foundation
 
 - [x] Task 0 — safe foundation import and immutable baseline.
-- [ ] Task 1 — repository contracts and production graph fence.
+- [x] Task 1 — repository contracts and production graph fence.
 - [ ] Task 2 — canonical Nox mask contract and separate hash acceptance.
 - [ ] Task 3 — stable identity integration.
 - [ ] Task 4 — observational causal bridge.
@@ -200,3 +200,7 @@ Goal package создан в `docs/goals/nox-hermes-foundation-migration`. Пл�
 ### Task 0 review
 
 Полный pinned Hermes tree материализован как foundation на отдельной ветке и подключён к синхронизированному форку `EidzokuxS/hermes-agent`. Clean packaged commit `ba59ab340a7c99b56b97cbaf7581fb4691d80b02` прошёл полный first-launch bootstrap на Windows и достиг собственного backend с `Gateway ready`; rollback checkout исходной Nox запускается и проходит 6 файлов / 14 foundation-тестов. Полный Python denominator зафиксирован по всем 1976 файлам: 1808 файлов exit 0, 38 843 settled pass, 673 settled fail, три timeout-файла и одна collection error; это явный pinned-upstream Windows baseline, а не green claim. Installer long-path, fork provenance, managed uv и PowerShell 5.1/7 seams исправлены bounded-изменениями. Маска, брендинг и causal bridge не начинались.
+
+### Task 1 review
+
+Production-контракт переведён с деклараций на механический fence. Единственный Desktop — `apps/desktop`; его 581 достижимый TypeScript-модуль и 2704 внутренних import-ребра не достигают старого Node runtime, shadow cortex, testkit или закрытых путей. Единственный локальный chat/model route — Hermes `serve` через `hermes_cli.main`; root workspaces исключают все retained Nox apps/packages. Пять негативных фикстур ломают fence при возврате custom runtime, cortex, testkit, deep runtime import или closed-path import. Acceptance artifact `production-graph-baseline.json` детерминирован и не содержит machine/user state. Nox/Hermes truth и data-directory ownership зафиксированы в `docs/architecture/hermes-foundation-boundaries.md`. Проверки: Nox graph 7/7, Ruff pass, Desktop platform 320 pass / 3 host skips / 0 fail, Desktop typecheck pass. Identity, causal bridge, branding и data-path changes не начинались.
