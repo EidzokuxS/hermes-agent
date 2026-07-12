@@ -63,3 +63,21 @@
 - **Decision:** Assert the observable string contract: null input normalizes to an empty string. The production helper is unchanged.
 - **Why this preserves intent:** The test now exercises the helper's actual typed PowerShell boundary rather than failing inside its own assertion harness.
 - **Rollback:** Change the expectation only if the production parameter type or null-normalization contract changes.
+
+## D-008 — Windows invokes the canonical Python runner without the POSIX wrapper
+
+- **Recorded:** 2026-07-12
+- **Plan location:** Task 0, exact upstream Python test denominator.
+- **Evidence:** `scripts/run_tests.sh` only probes `.venv/bin/python`, while the locked native Windows uv environment exposes `.venv/Scripts/python.exe`. WSL execution translated Windows file URIs into `\\mnt\\c` paths, and native Python required explicit UTF-8 flags because `LANG=C.UTF-8` does not override the Windows console code page.
+- **Decision:** Run the same `scripts/run_tests_parallel.py` natively with a cleared environment, the wrapper's UTC/locale/hash settings, eight workers, and Windows-equivalent `PYTHONUTF8=1` plus `PYTHONIOENCODING=utf-8`. Install the locked `all` and `dev` extras before discovery. Do not count the missing-extra, WSL-translated or cp1251-aborted attempts as product baselines.
+- **Why this preserves intent:** Per-file process isolation, credential removal, deterministic environment and the complete test denominator are retained without introducing a path-translation layer the Windows product never uses.
+- **Rollback:** Return to `scripts/run_tests.sh` verbatim if it gains a native Windows `.venv/Scripts/python.exe` path and UTF-8 environment support.
+
+## D-009 — Managed uv bootstrap retries one transient installer miss
+
+- **Recorded:** 2026-07-12
+- **Plan location:** Task 0, ordinary packaged Desktop restart proof.
+- **Evidence:** A packaged launch against the normal `%LOCALAPPDATA%\hermes` root reached the official Astral installer but returned without `bin\uv.exe`; the Desktop could only report `uv installation failed`. Re-running the exact pinned stage immediately succeeded and installed uv `0.11.28`, proving a transient download/installer miss rather than an unsupported host. The original stage discarded child output, did not record its exit code and attempted the network operation only once.
+- **Decision:** Keep Astral's documented `UV_INSTALL_DIR` contract, add `UV_NO_MODIFY_PATH=1` for the managed install, retry once when the child returns without the expected executable, record the child exit code, and restore both environment variables in `finally`. The operation remains bounded to two attempts and still fails visibly if neither produces `uv.exe`.
+- **Why this preserves intent:** First-run Desktop bootstrap becomes resilient to a single transient installer miss without probing arbitrary host uv locations, modifying shell profiles or hiding a persistent failure.
+- **Rollback:** Remove the retry only if the packaged distribution stops depending on a network uv bootstrap or provides an equally bounded, verified local uv payload.

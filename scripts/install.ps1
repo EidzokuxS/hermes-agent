@@ -462,31 +462,45 @@ function Install-Uv {
     # UV_INSTALL_DIR tells the astral installer to place the binary
     # directly into $HermesHome\bin instead of ~/.local/bin.
     $prevEAP = $ErrorActionPreference
+    $previousInstallDir = $env:UV_INSTALL_DIR
+    $previousNoModifyPath = $env:UV_NO_MODIFY_PATH
     try {
         $ErrorActionPreference = "Continue"
         $env:UV_INSTALL_DIR = Join-Path $HermesHome "bin"
+        $env:UV_NO_MODIFY_PATH = "1"
         # Spawn via the resolved host exe (see Get-PowerShellHostExe) rather
         # than a bare `powershell`, which isn't guaranteed to be on PATH under
         # PowerShell 7 / pwsh-only setups.
         $psHostExe = Get-PowerShellHostExe
-        & $psHostExe -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex" 2>&1 | Out-Null
-        $ErrorActionPreference = $prevEAP
+        $uvInstallerExitCode = $null
+        foreach ($attempt in 1..2) {
+            & $psHostExe -NoProfile -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex" 2>&1 | Out-Null
+            $uvInstallerExitCode = $LASTEXITCODE
 
-        if (Test-Path $managedUv) {
-            $script:UvCmd = $managedUv
-            $version = & $managedUv --version
-            Write-Success "Managed uv installed ($version)"
-            return $true
+            if (Test-Path $managedUv) {
+                $script:UvCmd = $managedUv
+                $version = & $managedUv --version
+                Write-Success "Managed uv installed ($version)"
+                return $true
+            }
+
+            if ($attempt -lt 2) {
+                Write-Warn "uv installer did not produce uv.exe (exit $uvInstallerExitCode); retrying once..."
+                Start-Sleep -Seconds 1
+            }
         }
 
-        Write-Err "uv installed but not found at $managedUv"
+        Write-Err "uv installer exited $uvInstallerExitCode but did not create $managedUv"
         Write-Info "Install manually: https://docs.astral.sh/uv/getting-started/installation/"
         return $false
     } catch {
-        if ($prevEAP) { $ErrorActionPreference = $prevEAP }
         Write-Err "Failed to install uv: $_"
         Write-Info "Install manually: https://docs.astral.sh/uv/getting-started/installation/"
         return $false
+    } finally {
+        $ErrorActionPreference = $prevEAP
+        $env:UV_INSTALL_DIR = $previousInstallDir
+        $env:UV_NO_MODIFY_PATH = $previousNoModifyPath
     }
 }
 

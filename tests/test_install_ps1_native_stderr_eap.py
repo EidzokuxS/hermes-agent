@@ -73,6 +73,21 @@ def test_uv_venv_and_dependency_installs_relax_eap() -> None:
     _assert_relaxed_call(text, r"& \$UvCmd pip install -e \$tier\.Spec")
 
 
+def test_managed_uv_install_is_bounded_and_retryable() -> None:
+    """A transient Astral download must not force manual Desktop repair."""
+    text = _install_ps1()
+    function_start = text.index("function Install-Uv")
+    function_end = text.index("function Sync-EnvPath", function_start)
+    body = text[function_start:function_end]
+
+    assert 'foreach ($attempt in 1..2)' in body
+    assert '$env:UV_NO_MODIFY_PATH = "1"' in body
+    assert '$uvInstallerExitCode = $LASTEXITCODE' in body
+    assert 'if (Test-Path $managedUv)' in body
+    assert '$env:UV_INSTALL_DIR = $previousInstallDir' in body
+    assert '$env:UV_NO_MODIFY_PATH = $previousNoModifyPath' in body
+
+
 def test_uv_venv_failure_is_not_swallowed_after_eap_relax() -> None:
     """Relaxing EAP must not let a genuine `uv venv` failure pass as success.
 
