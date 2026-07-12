@@ -13,6 +13,12 @@
     "rollbackTag": "nox-causal-loop-proven-v1",
     "trackedFileCount": 233
   },
+  "foundationFork": {
+    "repository": "https://github.com/EidzokuxS/hermes-agent",
+    "upstream": "https://github.com/NousResearch/hermes-agent",
+    "bootstrapSource": "fork",
+    "upstreamSyncPolicy": "fast-forward-only"
+  },
   "policy": {
     "mode": "full-tree-foundation",
     "defaultForSourceTree": "upstream",

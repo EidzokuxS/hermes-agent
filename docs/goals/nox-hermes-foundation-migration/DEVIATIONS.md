@@ -36,3 +36,12 @@
 - **Decision:** Make the onboarding mock accept the endpoint query, expect the visible `/docs` target, and derive the separator with the same host locale. Production files are unchanged.
 - **Why this preserves intent:** The assertions again test the actual API and UX contract rather than stale literals; no failure is hidden or skipped.
 - **Rollback:** Update these expectations together with any future intentional API/title/localization contract change.
+
+## D-005 — Nox fork owns bootstrap and update provenance
+
+- **Recorded:** 2026-07-12
+- **Plan location:** Task 0, packaged Desktop baseline and donor provenance.
+- **Evidence:** The first packaged build embedded the local migration SHA but attempted to fetch its installer from `NousResearch/hermes-agent`, where that Nox commit cannot exist. The existing project fork `EidzokuxS/hermes-agent` was 2214 commits behind upstream and could be synchronized by fast-forward with no divergent commits.
+- **Decision:** Keep `NousResearch/hermes-agent@4281151…` as the immutable donor source, synchronize the fork's `main` to upstream by fast-forward, and make `EidzokuxS/hermes-agent` the canonical `origin`, install-script source and update remote for Nox-owned commits. Migration work remains on `migration/hermes-foundation`; upstream `main` is not mixed into the pinned migration branch.
+- **Why this preserves intent:** Full Hermes provenance remains auditable while packaged Nox commits can retrieve the exact installer script committed with their own build.
+- **Rollback:** Point bootstrap and update constants back to a different Nox-owned repository only after that repository contains every packaged build commit and its matching installer scripts.
