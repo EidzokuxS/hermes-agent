@@ -45,66 +45,72 @@ export function NoxTimeline({
   return (
     <ol aria-label="Nox activity" className="timeline">
       {items.map((item, index) => (
-        <li className="causal-entry" key={item.eventId ?? item.clientEventId ?? index}>
-          <div aria-hidden="true" className="causal-spine">
-            <span />
-          </div>
-          <article>
-            <header className="entry-header">
-              <div>
-                <span className="entry-kind">{eventLabel(item.kind)}</span>
-                <time dateTime={item.occurredAt}>
-                  {formatMessageTimestamp(item.occurredAt, {
-                    today: time => time,
-                    yesterday: time => `Yesterday ${time}`
-                  })}
-                </time>
+        <li className="activity-turn" id={`activity-${index}`} key={item.eventId ?? item.clientEventId ?? index}>
+          <article className="message message--user">
+            <span aria-hidden="true" className="message-avatar">
+              Y
+            </span>
+            <div className="message-content">
+              <header className="entry-header">
+                <div>
+                  <span className="entry-kind">{eventLabel(item.kind)}</span>
+                  <time dateTime={item.occurredAt}>
+                    {formatMessageTimestamp(item.occurredAt, {
+                      today: time => time,
+                      yesterday: time => `Yesterday ${time}`
+                    })}
+                  </time>
+                </div>
+                <span className={`delivery delivery--${item.delivery}`} data-delivery-state={item.delivery}>
+                  <i />
+                  {deliveryLabel(item.delivery, item.terminal !== undefined)}
+                </span>
+              </header>
+              <p className="request-content">{item.content}</p>
+              <div className="act-line">
+                <ActStatus act={item.act} terminal={item.terminal} />
+                {item.act !== undefined && item.terminal === undefined && (
+                  <Button onClick={() => void onCancel(item.act!.actId)} size="inline" variant="text">
+                    Stop
+                  </Button>
+                )}
               </div>
-              <span className={`delivery delivery--${item.delivery}`} data-delivery-state={item.delivery}>
-                <i />
-                {deliveryLabel(item.delivery, item.terminal !== undefined)}
-              </span>
-            </header>
-            <p className="request-content">{item.content}</p>
-            <div className="act-line">
-              <span aria-hidden="true" className="codicon codicon-chevron-right causal-arrow" />
-              <ActStatus act={item.act} terminal={item.terminal} />
-              {item.act !== undefined && item.terminal === undefined && (
-                <Button onClick={() => void onCancel(item.act!.actId)} size="inline" variant="text">
-                  Stop
-                </Button>
-              )}
             </div>
-            {item.emissions.map(emission => (
-              <section className="emission" key={emission.emissionId}>
-                <div className="emission-label">
-                  <span>Nox</span>
+          </article>
+          {item.emissions.map(emission => (
+            <article className="message message--nox" key={emission.emissionId}>
+              <span aria-hidden="true" className="message-avatar message-avatar--nox">
+                N
+              </span>
+              <div className="message-content">
+                <header className="entry-header">
+                  <span className="entry-kind">Nox</span>
                   <time dateTime={emission.occurredAt}>
                     {formatMessageTimestamp(emission.occurredAt, {
                       today: time => time,
                       yesterday: time => `Yesterday ${time}`
                     })}
                   </time>
-                </div>
+                </header>
                 <p>{emission.content}</p>
-              </section>
-            ))}
-            {item.terminal?.status === 'completed-silent' && (
-              <div className="silent-settlement">
-                <span aria-hidden="true" className="codicon codicon-check" /> Completed without a reply.
+              </div>
+            </article>
+          ))}
+          {item.terminal?.status === 'completed-silent' && (
+            <div className="silent-settlement">
+              <span aria-hidden="true" className="codicon codicon-check" /> Completed without a reply.
+            </div>
+          )}
+          {item.terminal !== undefined &&
+            ['failed', 'rejected', 'interrupted', 'cancelled'].includes(item.terminal.status) && (
+              <div className="terminal-detail">
+                {'message' in item.terminal
+                  ? item.terminal.message
+                  : 'reason' in item.terminal
+                    ? item.terminal.reason
+                    : item.terminal.status}
               </div>
             )}
-            {item.terminal !== undefined &&
-              ['failed', 'rejected', 'interrupted', 'cancelled'].includes(item.terminal.status) && (
-                <div className="terminal-detail">
-                  {'message' in item.terminal
-                    ? item.terminal.message
-                    : 'reason' in item.terminal
-                      ? item.terminal.reason
-                      : item.terminal.status}
-                </div>
-              )}
-          </article>
         </li>
       ))}
     </ol>

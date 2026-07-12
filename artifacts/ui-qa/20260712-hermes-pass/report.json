@@ -1,0 +1,50 @@
+{
+  "createdAt": "2026-07-12T15:04:10.175Z",
+  "reference": {
+    "source": "Hermes Desktop",
+    "officialScreenshot": "artifacts/ui-references/hermes-desktop-official-20260712.png",
+    "url": "https://docs.ollama.com/integrations/hermes-desktop",
+    "sourceCode": "https://github.com/NousResearch/hermes-agent/tree/main/apps/desktop",
+    "principles": [
+      "chat is the home surface",
+      "flat rather than boxed",
+      "sidebar for durable navigation",
+      "composer docked at the bottom",
+      "runtime metadata in a thin status bar"
+    ]
+  },
+  "scenarios": {
+    "empty1200": {
+      "composerHeight": 74,
+      "horizontalOverflow": 0,
+      "sendDisabled": true,
+      "sidebarWidth": 228,
+      "textareaDisabled": false
+    },
+    "compact760": {
+      "composerHeight": 74,
+      "horizontalOverflow": 0,
+      "sidebarDisplay": "none",
+      "threadVisible": true
+    },
+    "unhealthy": {
+      "alert": "The local runtime stopped unexpectedly.",
+      "sendDisabled": true,
+      "status": "Needs attention",
+      "textareaDisabled": true
+    },
+    "keyboard": {
+      "newMessageCount": 1,
+      "focusAfterNew": {
+        "label": "Message Nox",
+        "tag": "TEXTAREA"
+      },
+      "newComposerCount": 1,
+      "composerBehavior": {
+        "sendEnabled": true,
+        "value": "Keyboard check\n"
+      }
+    }
+  },
+  "consoleWarningsAndErrors": []
+}

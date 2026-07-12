@@ -5,12 +5,10 @@ import { Textarea } from '../components/ui/textarea.js'
 
 export function NoxComposer({
   disabled,
-  onSubmit,
-  variant = 'default'
+  onSubmit
 }: {
   disabled: boolean
   onSubmit: (content: string) => Promise<void>
-  variant?: 'default' | 'hero'
 }) {
   const [content, setContent] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -30,12 +28,8 @@ export function NoxComposer({
     }
   }
   return (
-    <div className={`composer-wrap composer-wrap--${variant}`}>
-      <div className="composer-kicker">
-        <span>Message</span>
-        <span>{content.length.toLocaleString()} / 65,536</span>
-      </div>
-      <div className="composer">
+    <div className="composer-wrap">
+      <div className="composer-surface">
         <Textarea
           aria-label="Message Nox"
           disabled={disabled || submitting}
@@ -48,16 +42,23 @@ export function NoxComposer({
             }
           }}
           placeholder="Write a message to Nox…"
-          rows={3}
+          rows={2}
           spellCheck
           value={content}
         />
-        <Button disabled={disabled || submitting || !content.trim()} onClick={() => void send()}>
-          {submitting ? 'Sending…' : 'Send'}
+        <div className="composer-footer">
+          <span>Enter to send · Shift+Enter for a new line</span>
+          <span className="composer-count">{content.length.toLocaleString()} / 65,536</span>
+        </div>
+        <Button
+          aria-label={submitting ? 'Sending' : 'Send'}
+          disabled={disabled || submitting || !content.trim()}
+          onClick={() => void send()}
+          title={submitting ? 'Sending' : 'Send'}
+        >
           <span aria-hidden="true" className="codicon codicon-send" />
         </Button>
       </div>
-      <p className="composer-note">Enter to send · Shift+Enter for a new line</p>
     </div>
   )
 }
