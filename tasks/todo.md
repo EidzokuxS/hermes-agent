@@ -124,7 +124,7 @@ Goal package создан в `docs/goals/nox-first-causal-loop`. Старый RP
 - [x] Task 1 — versioned causal protocol.
 - [x] Task 2 — SQLite Journal, snapshots and independent reader.
 - [x] Task 3 — deterministic State transition and input assembly.
-- [ ] Task 4 — Pi CortexPort and proposal fence.
+- [x] Task 4 — Pi CortexPort and proposal fence.
 - [ ] Task 5 — runtime kernel, Continuation and recovery.
 - [ ] Task 6 — Nox JSON-RPC transport.
 - [ ] Task 7 — Hermes-derived Desktop shell.
@@ -142,3 +142,5 @@ Task 1 завершён единым `@nox/protocol`: шесть versioned primi
 Task 2 завершён одним `node:sqlite` writer и независимым read-only auditor: STRICT migration, WAL/FULL durability, prepared statements, `BEGIN IMMEDIATE`, optimistic State head, append-only Journal/snapshots/blobs, idempotent receipts/commits, unique admission/Continuation fire, checkpoint + Backup API evidence copy. Трёхточечная fault matrix, reopen/history verification, database guards и rejected-Effect audit записаны в `docs/architecture/sqlite-store-evidence.md`; 10 focused tests и package build/typecheck прошли.
 
 Task 3 завершён pure reducer и deterministic CortexInput builder. Shared strict input contract добавлен в `@nox/protocol`, чтобы runtime и Pi зависели от одной границы без reverse dependency. Six-permutation Effect test, immutable JSON Pointer transitions, conditional State versioning, transcript exclusion, observed-time semantics и locked cross-process hash записаны в `docs/architecture/runtime-pure-evidence.md`; 11 runtime tests и protocol regressions прошли.
+
+Task 4 завершён bounded Pi CortexPort: fresh low-level AgentContext, один provider turn, единственный schema-bound terminal `propose_act`, composed abort/timeout, token cap, zero hidden retry и operational artifact без thinking/credentials. Семь outcome-классов, fresh-context proof, model fence и direct dependency graph записаны в `docs/architecture/pi-cortex-evidence.md`; 9 focused tests, package build/typecheck и strict live-skeleton check прошли.

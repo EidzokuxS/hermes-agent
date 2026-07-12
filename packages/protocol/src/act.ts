@@ -41,6 +41,10 @@ export const actProposalSchema = z
     }
   })
 
+export const actProposalJsonSchema = z.toJSONSchema(actProposalSchema, {
+  target: 'draft-7'
+})
+
 const proposedResultSchema = z
   .object({
     kind: z.literal('proposed'),

@@ -1,4 +1,5 @@
 export {
+  actProposalJsonSchema,
   actProposalResultSchema,
   actProposalSchema,
   actSchema,
