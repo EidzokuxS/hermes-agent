@@ -1,6 +1,6 @@
 import { canonicalHash } from '@nox/protocol'
 import type { FoundationState, InterfaceEvent, ViewSnapshot } from '@nox/protocol'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { NoxDesktopBridge } from '../transport/nox-client.js'
@@ -50,6 +50,7 @@ function emptySnapshot(): ViewSnapshot {
 }
 
 afterEach(() => {
+  cleanup()
   delete window.nox
 })
 
@@ -71,6 +72,7 @@ describe('Nox shell vertical', () => {
         }
       }),
       cancelAct: async request => ({ actId: request.actId, protocolVersion: 1, requested: true }),
+      runtimeHealth: async () => undefined,
       snapshot: async () => emptySnapshot(),
       subscribeHealth: listener => {
         health = listener
@@ -131,5 +133,47 @@ describe('Nox shell vertical', () => {
     health?.({ message: 'Continuation loop failed', status: 'unhealthy' })
     await screen.findByText('runtime unhealthy')
     expect(screen.getByRole('alert').textContent).toContain('Continuation loop failed')
+  })
+
+  it('preserves unhealthy state reported before snapshot hydration', async () => {
+    let health: ((event: unknown) => void) | undefined
+    let resolveSnapshot: ((snapshot: ViewSnapshot) => void) | undefined
+    const snapshot = new Promise<ViewSnapshot>(resolve => {
+      resolveSnapshot = resolve
+    })
+    window.nox = {
+      appendEvent: async () => undefined,
+      cancelAct: async request => ({ actId: request.actId, protocolVersion: 1, requested: true }),
+      runtimeHealth: async () => undefined,
+      snapshot: () => snapshot,
+      subscribe: () => () => undefined,
+      subscribeHealth: listener => {
+        health = listener
+        return () => undefined
+      }
+    }
+
+    render(<NoxShell />)
+    health?.({ message: 'Runtime exited before hydration', status: 'unhealthy' })
+    resolveSnapshot?.(emptySnapshot())
+
+    await screen.findByText('runtime unhealthy')
+    expect(screen.getByRole('alert').textContent).toContain('Runtime exited before hydration')
+  })
+
+  it('loads persistent unhealthy state when a new window connects', async () => {
+    window.nox = {
+      appendEvent: async () => undefined,
+      cancelAct: async request => ({ actId: request.actId, protocolVersion: 1, requested: true }),
+      runtimeHealth: async () => ({ message: 'Runtime exited while windowless', status: 'unhealthy' }),
+      snapshot: async () => emptySnapshot(),
+      subscribe: () => () => undefined,
+      subscribeHealth: () => () => undefined
+    }
+
+    render(<NoxShell />)
+
+    await screen.findByText('runtime unhealthy')
+    expect(screen.getByRole('alert').textContent).toContain('Runtime exited while windowless')
   })
 })

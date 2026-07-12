@@ -121,6 +121,12 @@ function installDomainHandlers(): void {
     startSubscriptionPump()
     return view
   })
+  ipcMain.handle('nox:runtime-health-snapshot', event => {
+    requireTrustedRenderer(event)
+    return lastRuntimeHealth === undefined
+      ? undefined
+      : { message: lastRuntimeHealth.message, status: 'unhealthy' as const }
+  })
   ipcMain.handle('nox:event-append', async (event, input: unknown) => {
     requireTrustedRenderer(event)
     if (typeof input !== 'object' || input === null) {

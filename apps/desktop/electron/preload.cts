@@ -7,6 +7,7 @@ const api = {
     ipcRenderer.invoke('nox:event-append', request) as Promise<unknown>,
   cancelAct: (request: { actId: string; reason: string }) =>
     ipcRenderer.invoke('nox:act-cancel', request) as Promise<unknown>,
+  runtimeHealth: () => ipcRenderer.invoke('nox:runtime-health-snapshot') as Promise<unknown>,
   snapshot: () => ipcRenderer.invoke('nox:view-snapshot') as Promise<unknown>,
   subscribeHealth: (listener: (event: unknown) => void): (() => void) => {
     const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown): void => listener(payload)
