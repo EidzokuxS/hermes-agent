@@ -185,3 +185,18 @@ Goal package создан в `docs/goals/nox-hermes-foundation-migration`. Пл�
 - **Plan path:** `docs/goals/nox-hermes-foundation-migration/PLAN.md`
 - **Accepted PLAN SHA-256:** `F453963F6B002C9DA343E8A100FE429E66896AFC7BBAECC318955B4896B6D493`
 - **Release:** Task 0 разрешён; интеграция маски остаётся закрытой до отдельного принятия Task 2 revision hash.
+
+## Execution: переезд на Hermes Foundation
+
+- [x] Task 0 — safe foundation import and immutable baseline.
+- [ ] Task 1 — repository contracts and production graph fence.
+- [ ] Task 2 — canonical Nox mask contract and separate hash acceptance.
+- [ ] Task 3 — stable identity integration.
+- [ ] Task 4 — observational causal bridge.
+- [ ] Task 5 — Nox product mode and bounded branding.
+- [ ] Task 6 — displaced-path cutover and parity.
+- [ ] Task 7 — target-perspective evidence and final acceptance.
+
+### Task 0 review
+
+Полный pinned Hermes tree материализован как foundation на отдельной ветке и подключён к синхронизированному форку `EidzokuxS/hermes-agent`. Clean packaged commit `ba59ab340a7c99b56b97cbaf7581fb4691d80b02` прошёл полный first-launch bootstrap на Windows и достиг собственного backend с `Gateway ready`; rollback checkout исходной Nox запускается и проходит 6 файлов / 14 foundation-тестов. Полный Python denominator зафиксирован по всем 1976 файлам: 1808 файлов exit 0, 38 843 settled pass, 673 settled fail, три timeout-файла и одна collection error; это явный pinned-upstream Windows baseline, а не green claim. Installer long-path, fork provenance, managed uv и PowerShell 5.1/7 seams исправлены bounded-изменениями. Маска, брендинг и causal bridge не начинались.

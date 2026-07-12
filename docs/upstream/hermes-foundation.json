@@ -17,7 +17,9 @@
     "repository": "https://github.com/EidzokuxS/hermes-agent",
     "upstream": "https://github.com/NousResearch/hermes-agent",
     "bootstrapSource": "fork",
-    "upstreamSyncPolicy": "fast-forward-only"
+    "upstreamSyncPolicy": "fast-forward-only",
+    "upstreamMainSyncedCommit": "7b5ba2054721dde998ed47fd4a0f031955278e99",
+    "migrationBranch": "migration/hermes-foundation"
   },
   "policy": {
     "mode": "full-tree-foundation",
@@ -73,7 +75,20 @@
     "REFERENCE ONLY/**"
   ],
   "verification": {
-    "status": "pending-task-0-baseline",
-    "report": "docs/upstream/HERMES-BASELINE.md"
+    "status": "task-0-baseline-complete",
+    "report": "docs/upstream/HERMES-BASELINE.md",
+    "packagedProofCommit": "ba59ab340a7c99b56b97cbaf7581fb4691d80b02",
+    "packagedReadyEvidence": "artifacts/evidence/hermes-foundation/task0/packaged-hermes-ready.png",
+    "rollbackEvidence": "artifacts/evidence/hermes-foundation/task0/rollback-nox-online.png",
+    "pythonDenominator": {
+      "files": 1976,
+      "passedFiles": 1808,
+      "nonzeroFiles": 168,
+      "settledPassedTests": 38843,
+      "settledFailedTests": 673,
+      "testFailureFiles": 164,
+      "timeoutFiles": 3,
+      "collectionErrorFiles": 1
+    }
   }
 }
