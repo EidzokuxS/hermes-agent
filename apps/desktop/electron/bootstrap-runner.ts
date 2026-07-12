@@ -344,7 +344,11 @@ function resolveWindowsPowerShell() {
   return 'powershell.exe'
 }
 
-function buildPowerShellSpawnEnv(ps, hermesHome, sourceEnv = process.env) {
+function buildPowerShellSpawnEnv(
+  ps: string,
+  hermesHome: string | null | undefined,
+  sourceEnv: NodeJS.ProcessEnv = process.env
+): NodeJS.ProcessEnv {
   const env = {
     ...sourceEnv,
     // Pass HERMES_HOME through so install.ps1 respects the caller's
