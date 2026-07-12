@@ -131,7 +131,7 @@ Goal package создан в `docs/goals/nox-first-causal-loop`. Старый RP
 - [x] Task 8 — Desktop projection and direct Nox cutover.
 - [x] Task 9 — deterministic hard-restart proof.
 - [x] Task 10 — evidence tooling and kill-criteria enforcement.
-- [ ] Task 11 — target-perspective acceptance with real Pi.
+- [x] Task 11 — target-perspective acceptance with real Pi.
 
 ### Execution review
 
@@ -160,3 +160,5 @@ Task 11 deterministic target perspective пройден на clean commit `87fbc
 Первый финальный review признал `task11-deterministic` недостаточным: E1 шёл через headless harness, а before screenshot был старым fixture. Корректирующий checkpoint перевёл deterministic и будущий real-Pi evidence на реальный Desktop submission, добавил production Continuation loop, Journal tail/pagination >64/>10k, полный Pi config fence, pre-persistence redaction, renderer-origin IPC fence, import traversal от пяти entrypoints и verifier binding к SQLite receipts/records/blobs/screenshots. Dirty smoke `review-fix-smoke2` проходит 16/16 на Node 24.18.0; Task 11 остаётся открытой до повторных review gates, clean bundle и успешного real Pi.
 
 Повторные POST/correctness/maintainability gates закрыты без внутренних замечаний после `6013bb3` и `a28cb6f`: bounded runtime/Desktop lookups, durable operational failures, live-window guards и sticky health hydration проверены. Финальный clean deterministic bundle `task11-deterministic-a28cb6f` дважды verified 16/16 (`sourceTreeDirty=false`, redaction pass, State v3). Единственный оставшийся acceptance blocker — успешный full real-Pi run; Task 11 и goal остаются открытыми.
+
+Task 11 завершён full bundle `real-pi-zai-glm47-20260712-1629` на clean commit `486eabf`: `zai/glm-4.7` выполнил два schema-valid `propose_act` по одной provider attempt, между Act runtime пережил принудительный `SIGKILL` и смену PID `45140 -> 43916`. Manifest содержит ровно 27 artifacts, full verifier дважды прошёл named bundle, redaction/kill criteria/independent SQLite replay — pass. Финальные correctness и POST/maintainability reviews: 0 blockers, 0 majors, 0 minors. Первая причинная петля доказана с target perspective.

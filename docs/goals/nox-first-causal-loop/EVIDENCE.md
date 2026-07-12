@@ -1,6 +1,6 @@
 # Первая причинная петля Nox — Evidence
 
-**Status:** `implemented but unproven`
+**Status:** `proven`
 
 ## Acceptance Evidence
 
@@ -27,9 +27,19 @@ Final clean deterministic bundle `artifacts/evidence/first-causal-loop/task11-de
 - offline audit replay: genesis through v3, runtime reducer and Desktop projection excluded;
 - deterministic-only verification passed twice from the sealed bundle; default verification rejected it because a full real-Pi lane is intentionally mandatory.
 
-The required real Pi run was attempted once and preserved at `artifacts/evidence/first-causal-loop/real-pi-attempt-01/`. `openai-codex / gpt-5.4-mini` returned `The usage limit has been reached` before producing a proposal. Its `real-pi-run.json` is `status=fail`; no retry or scripted substitution was counted as real evidence.
+The final full bundle `artifacts/evidence/first-causal-loop/real-pi-zai-glm47-20260712-1629/` was produced from clean commit `486eabff3113d60f0da7bd4ea921760f437c169c` and passes with 27 manifest-bound artifacts:
 
-Therefore deterministic implementation evidence is complete, but the goal's real-model acceptance condition is not.
+- real Pi provider/model: `zai / glm-4.7`, one provider attempt per Act;
+- exactly two external Events, receipts, admissions, `glm-4.7` Act starts, schema-valid proposals and matching `completed-effects` terminals;
+- each operational artifact contains exactly one `propose_act` call and one bounded `emission.append`, with no diagnostic or hidden-reasoning payload;
+- Journal order is `recorded 1 < admitted 2 < started 4` for E1 and `recorded 8 < admitted 9 < started 11` for E2;
+- the production runtime was terminated with `SIGKILL`; the restarted runtime used PID `43916` after PID `45140`;
+- both entry-scoped Desktop traces show `recording -> delivered -> admitted -> thinking -> settled` without reusing the other Act's projection;
+- independent SQLite inspection and replay bind both receipts, proposals, terminals, CortexInput blobs/hashes, screenshots and RPC traces;
+- manifest: `status=pass`, `evidenceLane=full`, `sourceTreeDirty=false`, `redaction=pass`;
+- default full verification passed repeatedly against the named immutable bundle, with exactly 27 files and no SQLite sidecars.
+
+Failed provider attempts remain preserved as negative evidence under separate run IDs. `real-pi-attempt-01` records the `openai-codex / gpt-5.4-mini` usage-limit failure; `real-pi-deepseek-20260712-1625` records insufficient provider balance; `real-pi-zai-glm47-20260712-1626` records the superseded cross-entry DOM observation defect. None was substituted for passing evidence.
 
 ## Verification
 
@@ -51,6 +61,9 @@ npm run verify:first-loop -- --bundle artifacts/evidence/first-causal-loop/task1
                                # 16 artifacts, status=pass
 npm run verify:first-loop -- --bundle artifacts/evidence/first-causal-loop/task11-deterministic-a28cb6f
                                # exit 1: full verification requires real-Pi evidence
+npm run evidence:first-loop -- --real-pi --run-id real-pi-zai-glm47-20260712-1629
+npm run verify:first-loop -- --bundle artifacts/evidence/first-causal-loop/real-pi-zai-glm47-20260712-1629
+                               # 27 artifacts, evidenceLane=full, status=pass
 ```
 
 Tamper proof: modifying a copied `deterministic/state-replay.json` caused offline verification to exit `1` with `Artifact byte length mismatch`.
@@ -61,4 +74,4 @@ Ten-run process repetition passed 10/10. The PLAN's literal `--runs 10` flag is 
 
 First POST/correctness passes found production Continuation scheduling, Journal tail/pagination, Cortex config integrity, diagnostic redaction, Desktop IPC origin, evidence provenance and import-graph gaps. Later reviews also found unbounded Desktop/runtime Journal projections, invisible post-ready runtime failures, ambiguous secret-scan paths and two destroyed-window/health ordering races.
 
-Repeated POST, correctness and maintainability reviews now report no remaining internal blocker: Journal lookups/projections are bounded, operational failures are journaled and surfaced, destroyed Electron objects are fenced, and unhealthy state survives pre-window and pre-hydration ordering. Completion still requires a successful configured real Pi run.
+Repeated POST, correctness and maintainability reviews report no remaining blocker, major or minor finding. The final reviewers independently inspected the full bundle, its screenshots, SQLite Journal, operational blobs and per-Act DOM traces. After removing reviewer-created SQLite sidecars, the named bundle passed the default verifier twice without recreating them. Task 11 and the full plan evidence gate are satisfied.
