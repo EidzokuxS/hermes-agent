@@ -30,12 +30,12 @@ export function NoxComposer({
   return (
     <div className="composer-wrap">
       <div className="composer-kicker">
-        <span>Request channel</span>
+        <span>Message</span>
         <span>{content.length.toLocaleString()} / 65,536</span>
       </div>
       <div className="composer">
         <Textarea
-          aria-label="Offer Nox a request"
+          aria-label="Message Nox"
           disabled={disabled || submitting}
           maxLength={65_536}
           onChange={event => setContent(event.target.value)}
@@ -45,17 +45,17 @@ export function NoxComposer({
               void send()
             }
           }}
-          placeholder="Offer a request. Nox decides whether and how to act."
+          placeholder="Write a message to Nox…"
           rows={3}
           spellCheck
           value={content}
         />
         <Button disabled={disabled || submitting || !content.trim()} onClick={() => void send()}>
-          {submitting ? 'Delivering…' : 'Deliver'}
-          <span aria-hidden="true">↗</span>
+          {submitting ? 'Sending…' : 'Send'}
+          <span aria-hidden="true" className="codicon codicon-send" />
         </Button>
       </div>
-      <p className="composer-note">Enter to deliver · Shift+Enter for a new line · delivery is not an instruction</p>
+      <p className="composer-note">Enter to send · Shift+Enter for a new line</p>
     </div>
   )
 }

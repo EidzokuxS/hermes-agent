@@ -118,7 +118,7 @@ async function launchDeterministicDesktop({ fireDue, now, phase, pidFile, userDa
     }
   })
   const page = await electronApp.firstWindow()
-  await page.waitForSelector('text=runtime present', { timeout: 15_000 })
+  await page.waitForSelector('text=Online', { timeout: 15_000 })
   return { electronApp, page }
 }
 
@@ -163,8 +163,8 @@ async function installDesktopObservations(page, entryOrdinal = 1) {
     const observations = []
     const sample = () => {
       const entry = document.querySelectorAll('.causal-entry')[targetOrdinal - 1]
-      const delivery = entry?.querySelector('.delivery')?.textContent?.trim()
-      const act = entry?.querySelector('.act-line [data-slot="badge"]')?.textContent?.trim()
+      const delivery = entry?.querySelector('.delivery')?.getAttribute('data-delivery-state')
+      const act = entry?.querySelector('.act-line [data-slot="badge"]')?.getAttribute('data-act-state')
       for (const value of [delivery && `delivery:${delivery}`, act && `act:${act}`]) {
         if (value && observations.at(-1) !== value) observations.push(value)
       }
@@ -190,8 +190,8 @@ async function deterministicDesktopFlow({ desktopDirectory, userData, temporary 
   let observationOrder
   try {
     await installDesktopObservations(first.page)
-    await first.page.getByLabel('Offer Nox a request').fill('Please consider this Event, Nox.')
-    await first.page.getByRole('button', { name: 'Deliver' }).click()
+    await first.page.getByLabel('Message Nox').fill('Please consider this Event, Nox.')
+    await first.page.getByRole('button', { name: 'Send' }).click()
     await first.page.getByText('E1 was accepted and C1 was planted.').waitFor({ timeout: 15_000 })
     await first.page.locator('.state-version strong').filter({ hasText: 'v1' }).waitFor({ timeout: 15_000 })
     await first.page.locator('.continuations li').waitFor({ timeout: 15_000 })
@@ -266,7 +266,7 @@ async function launchRealDesktop({ model, pidFile, provider, userData }) {
     }
   })
   const page = await electronApp.firstWindow()
-  await page.waitForSelector('text=runtime present', { timeout: 15_000 })
+  await page.waitForSelector('text=Online', { timeout: 15_000 })
   return { electronApp, page }
 }
 
@@ -274,25 +274,27 @@ async function waitForRealTerminal(page, ordinal) {
   await page.waitForFunction(
     expectedOrdinal => {
       const entries = [...document.querySelectorAll('.causal-entry')]
-      const label = entries[expectedOrdinal - 1]?.querySelector('.act-line [data-slot="badge"]')?.textContent?.trim()
-      return ['failed', 'rejected', 'settled', 'silent'].includes(label ?? '')
+      const state = entries[expectedOrdinal - 1]
+        ?.querySelector('.act-line [data-slot="badge"]')
+        ?.getAttribute('data-act-state')
+      return ['failed', 'rejected', 'settled', 'silent'].includes(state ?? '')
     },
     ordinal,
     { timeout: 180_000 }
   )
-  const label = await page
+  const state = await page
     .locator('.causal-entry')
     .nth(ordinal - 1)
     .locator('.act-line [data-slot="badge"]')
-    .textContent()
-  if (label?.trim() !== 'settled' && label?.trim() !== 'silent') {
+    .getAttribute('data-act-state')
+  if (state !== 'settled' && state !== 'silent') {
     const detail = await page
       .locator('.causal-entry')
       .nth(ordinal - 1)
       .textContent()
     throw new Error(`Real Pi Act ${ordinal} did not settle successfully: ${detail}`)
   }
-  return label.trim()
+  return state
 }
 
 async function realDesktopFlow({ desktopDirectory, model, provider, temporary, userData }) {
@@ -307,11 +309,11 @@ async function realDesktopFlow({ desktopDirectory, model, provider, temporary, u
   try {
     await installDesktopObservations(first.page)
     await first.page
-      .getByLabel('Offer Nox a request')
+      .getByLabel('Message Nox')
       .fill(
         'Observe this delivered Event and settle exactly one bounded Nox Act. Use propose_act once; an emission or explicit silence is valid.'
       )
-    await first.page.getByRole('button', { name: 'Deliver' }).click()
+    await first.page.getByRole('button', { name: 'Send' }).click()
     firstStatus = await waitForRealTerminal(first.page, 1)
     firstObservations = await first.page.evaluate(() => window.__noxObservations)
     requireObservedDeliveryOrder(firstObservations, 'First real Pi Desktop Act')
@@ -332,11 +334,11 @@ async function realDesktopFlow({ desktopDirectory, model, provider, temporary, u
   try {
     await installDesktopObservations(second.page, 2)
     await second.page
-      .getByLabel('Offer Nox a request')
+      .getByLabel('Message Nox')
       .fill(
         'This Event arrived after a hard runtime restart. Observe restored State and settle exactly one bounded Nox Act with propose_act once.'
       )
-    await second.page.getByRole('button', { name: 'Deliver' }).click()
+    await second.page.getByRole('button', { name: 'Send' }).click()
     secondStatus = await waitForRealTerminal(second.page, 2)
     secondObservations = await second.page.evaluate(() => window.__noxObservations)
     requireObservedDeliveryOrder(secondObservations, 'Second real Pi Desktop Act')

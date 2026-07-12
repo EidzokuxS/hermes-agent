@@ -34,7 +34,7 @@ async function launchDesktop(
     }
   })
   const page = await application.firstWindow()
-  await page.waitForSelector('text=runtime present', { timeout: 15_000 })
+  await page.waitForSelector('text=Online', { timeout: 15_000 })
   return { application, page }
 }
 
@@ -72,8 +72,10 @@ describe('Desktop first causal loop', () => {
       await first.page.evaluate(() => {
         const observations: string[] = []
         const sample = (): void => {
-          const delivery = [...document.querySelectorAll('.delivery')].at(-1)?.textContent?.trim()
-          const act = [...document.querySelectorAll('.act-line [data-slot="badge"]')].at(-1)?.textContent?.trim()
+          const delivery = [...document.querySelectorAll('.delivery')].at(-1)?.getAttribute('data-delivery-state')
+          const act = [...document.querySelectorAll('.act-line [data-slot="badge"]')]
+            .at(-1)
+            ?.getAttribute('data-act-state')
           for (const value of [delivery && `delivery:${delivery}`, act && `act:${act}`]) {
             if (value && observations.at(-1) !== value) {
               observations.push(value)
@@ -83,8 +85,8 @@ describe('Desktop first causal loop', () => {
         new MutationObserver(sample).observe(document.body, { childList: true, subtree: true, characterData: true })
         Object.assign(window, { __noxObservations: observations })
       })
-      await first.page.getByLabel('Offer Nox a request').fill('Please consider this Event, Nox.')
-      await first.page.getByRole('button', { name: 'Deliver' }).click()
+      await first.page.getByLabel('Message Nox').fill('Please consider this Event, Nox.')
+      await first.page.getByRole('button', { name: 'Send' }).click()
       await first.page.getByText('E1 was accepted and C1 was planted.').waitFor({ timeout: 15_000 })
       await first.page.locator('.state-version strong').filter({ hasText: 'v1' }).waitFor({ timeout: 15_000 })
       await first.page.locator('.continuations li').waitFor({ timeout: 15_000 })
@@ -98,7 +100,7 @@ describe('Desktop first causal loop', () => {
       firstPid = await runtimePid(firstPidFile)
       process.kill(firstPid, 'SIGKILL')
       await waitForProcessExit(firstPid)
-      await first.page.getByText('runtime unhealthy').waitFor({ timeout: 5_000 })
+      await first.page.locator('.runtime-presence').filter({ hasText: 'Needs attention' }).waitFor({ timeout: 5_000 })
     } finally {
       await first.application.close()
     }

@@ -21,6 +21,13 @@ import { NoxTimeline } from './nox-timeline.js'
 
 export function NoxShell() {
   const view = useStore($noxView)
+  const runtimeLabel = view.connecting
+    ? 'Connecting…'
+    : view.connected
+      ? 'Online'
+      : view.runtimeUnhealthy
+        ? 'Needs attention'
+        : 'Offline'
   useEffect(() => {
     if (window.nox === undefined) {
       loadFixtureView(new URLSearchParams(window.location.search).get('fixture') ?? 'emitted')
@@ -49,23 +56,17 @@ export function NoxShell() {
     <div className="nox-shell">
       <header className="topbar">
         <div className="identity-lockup">
-          <span className="identity-mark">N</span>
+          <span aria-hidden="true" className="identity-mark">
+            N
+          </span>
           <div>
-            <h1>NOX</h1>
-            <p>causal field</p>
+            <h1>Nox</h1>
+            <p>Local agent</p>
           </div>
         </div>
-        <div className="runtime-presence">
+        <div className={`runtime-presence${view.connected ? ' runtime-presence--live' : ''}`}>
           <span className={view.connected ? 'presence-dot presence-dot--live' : 'presence-dot'} />
-          <span>
-            {view.connecting
-              ? 'locating runtime'
-              : view.connected
-                ? 'runtime present'
-                : view.runtimeUnhealthy
-                  ? 'runtime unhealthy'
-                  : 'runtime unavailable'}
-          </span>
+          <span>{runtimeLabel}</span>
         </div>
         <StateVersion hash={view.stateHash} version={view.stateVersion} />
       </header>
@@ -73,10 +74,14 @@ export function NoxShell() {
         <section className="field">
           <div className="field-heading">
             <div>
-              <span>JOURNAL / LIVE PROJECTION</span>
-              <h2>What entered. What followed.</h2>
+              <span>Activity</span>
+              <h2>Messages and actions</h2>
+              <p>Everything Nox received, considered, and returned.</p>
             </div>
-            <code>cursor {view.journalCursor}</code>
+            <div className="activity-meta">
+              <span>{view.items.length === 1 ? '1 item' : `${view.items.length} items`}</span>
+              <code>Journal {view.journalCursor}</code>
+            </div>
           </div>
           {view.error && (
             <div className="connection-error" role="alert">
@@ -95,42 +100,64 @@ export function NoxShell() {
         </section>
         <aside className="causal-rail">
           <div className="rail-intro">
-            <span>CAUSAL SURFACE</span>
-            <p>The interface observes Nox. It does not own State, memory, or the transcript.</p>
+            <span>System</span>
+            <h2>{view.connected ? 'Nox is ready' : runtimeLabel}</h2>
+            <p>
+              {view.connected
+                ? 'The local runtime is connected and can receive messages.'
+                : 'The local runtime is unavailable.'}
+            </p>
           </div>
+          <dl className="system-summary">
+            <div>
+              <dt>Runtime</dt>
+              <dd className={view.connected ? 'value-online' : ''}>{runtimeLabel}</dd>
+            </div>
+            <div>
+              <dt>Model</dt>
+              <dd title={view.modelId}>{view.modelId || 'Not available'}</dd>
+            </div>
+            <div>
+              <dt>State</dt>
+              <dd>Version {view.stateVersion}</dd>
+            </div>
+            <div>
+              <dt>Journal</dt>
+              <dd>{view.journalCursor} records</dd>
+            </div>
+          </dl>
+          <div className="rail-divider" />
           <ContinuationList
             continuations={view.continuations}
             onRequestCancel={continuation =>
-              submit(
-                `Please consider cancelling Continuation ${continuation.continuationId} (${continuation.seed.label}).`
-              )
+              submit(`Cancel scheduled follow-up ${continuation.continuationId} (${continuation.seed.label}).`)
             }
           />
           <div className="rail-legend">
             <div className="rail-heading">
-              <h2>Legend</h2>
+              <h2>Status guide</h2>
             </div>
             <dl>
               <div>
                 <dt>
                   <i className="legend-dot legend-dot--delivered" />
-                  delivered
+                  Received
                 </dt>
-                <dd>durable receipt</dd>
+                <dd>Saved locally</dd>
               </div>
               <div>
                 <dt>
                   <i className="legend-dot legend-dot--active" />
-                  thinking
+                  Working
                 </dt>
-                <dd>Act in flight</dd>
+                <dd>Nox is processing it</dd>
               </div>
               <div>
                 <dt>
                   <i className="legend-dot" />
-                  silent
+                  Done · no reply
                 </dt>
-                <dd>valid settlement</dd>
+                <dd>Completed normally</dd>
               </div>
             </dl>
           </div>

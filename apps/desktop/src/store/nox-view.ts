@@ -31,6 +31,7 @@ export interface NoxViewState {
   error?: string
   items: NoxTimelineItem[]
   journalCursor: number
+  modelId: string
   runtimeUnhealthy: boolean
   stateHash: string
   stateVersion: number
@@ -42,6 +43,7 @@ const initialState: NoxViewState = {
   continuations: [],
   items: [],
   journalCursor: 0,
+  modelId: '',
   runtimeUnhealthy: false,
   stateHash: '',
   stateVersion: 0
@@ -121,6 +123,7 @@ export function hydrateNoxView(view: ViewSnapshot): void {
     continuations: view.openContinuations,
     items,
     journalCursor: view.journalCursor,
+    modelId: view.state.state.cortex.modelId,
     runtimeUnhealthy: false,
     stateHash: view.state.stateHash,
     stateVersion: view.state.stateVersion
@@ -282,6 +285,7 @@ export function loadFixtureView(outcome = 'emitted'): void {
       }
     ],
     journalCursor: 47,
+    modelId: 'gpt-5.4-mini',
     runtimeUnhealthy: false,
     stateHash: `sha256:${'a'.repeat(64)}`,
     stateVersion: 12

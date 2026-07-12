@@ -85,10 +85,10 @@ describe('Nox shell vertical', () => {
     }
     window.nox = bridge
     render(<NoxShell />)
-    await screen.findByText('runtime present')
-    fireEvent.change(screen.getByLabelText('Offer Nox a request'), { target: { value: 'Consider this request.' } })
-    fireEvent.click(screen.getByRole('button', { name: /Deliver/ }))
-    await waitFor(() => expect(screen.getAllByText('delivered').length).toBeGreaterThan(1))
+    await waitFor(() => expect(document.querySelector('.runtime-presence')?.textContent).toBe('Online'))
+    fireEvent.change(screen.getByLabelText('Message Nox'), { target: { value: 'Consider this request.' } })
+    fireEvent.click(screen.getByRole('button', { name: /Send/ }))
+    await waitFor(() => expect(document.querySelector('[data-delivery-state="delivered"]')).toBeTruthy())
 
     notify?.({
       eventId: 'event-1',
@@ -120,7 +120,7 @@ describe('Nox shell vertical', () => {
       observedAt: now,
       protocolVersion: 1
     })
-    await screen.findByText('thinking')
+    await waitFor(() => expect(document.querySelector('[data-act-state="thinking"]')).toBeTruthy())
     notify?.({
       act: { actId: 'act-1', completedAt: now, protocolVersion: 1, stateVersion: 0, status: 'completed-silent' },
       interfaceEventId: 'interface-terminal',
@@ -129,9 +129,9 @@ describe('Nox shell vertical', () => {
       observedAt: now,
       protocolVersion: 1
     })
-    await waitFor(() => expect(screen.getByText('Act settled without an emission.')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Completed without a reply.')).toBeTruthy())
     health?.({ message: 'Continuation loop failed', status: 'unhealthy' })
-    await screen.findByText('runtime unhealthy')
+    await waitFor(() => expect(document.querySelector('.runtime-presence')?.textContent).toBe('Needs attention'))
     expect(screen.getByRole('alert').textContent).toContain('Continuation loop failed')
   })
 
@@ -157,7 +157,7 @@ describe('Nox shell vertical', () => {
     health?.({ message: 'Runtime exited before hydration', status: 'unhealthy' })
     resolveSnapshot?.(emptySnapshot())
 
-    await screen.findByText('runtime unhealthy')
+    await waitFor(() => expect(document.querySelector('.runtime-presence')?.textContent).toBe('Needs attention'))
     expect(screen.getByRole('alert').textContent).toContain('Runtime exited before hydration')
   })
 
@@ -173,7 +173,7 @@ describe('Nox shell vertical', () => {
 
     render(<NoxShell />)
 
-    await screen.findByText('runtime unhealthy')
+    await waitFor(() => expect(document.querySelector('.runtime-presence')?.textContent).toBe('Needs attention'))
     expect(screen.getByRole('alert').textContent).toContain('Runtime exited while windowless')
   })
 })

@@ -108,7 +108,7 @@ describe('Desktop causal projection integration', () => {
       openContinuations: [],
       protocolVersion: 1,
       state: {
-        state: {} as never,
+        state: { cortex: { modelId: 'model-a' } } as never,
         stateHash: hash('3'),
         stateVersion: 0,
         throughSequence: 4

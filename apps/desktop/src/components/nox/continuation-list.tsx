@@ -13,11 +13,11 @@ export function ContinuationList({
   return (
     <section aria-labelledby="continuations-title" className="continuations">
       <div className="rail-heading">
-        <h2 id="continuations-title">Continuations</h2>
+        <h2 id="continuations-title">Scheduled follow-ups</h2>
         <span>{continuations.length}</span>
       </div>
       {continuations.length === 0 ? (
-        <p className="rail-empty">Nothing is waiting to re-enter the causal stream.</p>
+        <p className="rail-empty">No follow-ups are scheduled.</p>
       ) : (
         <ol>
           {continuations.map(continuation => (
@@ -29,7 +29,7 @@ export function ContinuationList({
                   {relativeTime(new Date(continuation.seed.due.at).getTime())}
                 </time>
                 <Button onClick={() => void onRequestCancel(continuation)} size="inline" variant="text">
-                  request cancellation
+                  Cancel follow-up
                 </Button>
               </div>
             </li>
