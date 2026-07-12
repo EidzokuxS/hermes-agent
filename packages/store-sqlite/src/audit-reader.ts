@@ -65,6 +65,31 @@ export class SqliteAuditReader {
     return rows.map(row => this.#parseJournalRow(row))
   }
 
+  readAllJournal(query: Omit<JournalQuery, 'limit' | 'order'> & { pageSize?: number } = {}): JournalRecord[] {
+    this.#assertOpen()
+    const pageSize = Math.min(Math.max(query.pageSize ?? 100_000, 1), 100_000)
+    const records: JournalRecord[] = []
+    let cursor = query.afterSequence ?? 0
+    while (true) {
+      const page = this.readJournal({
+        afterSequence: cursor,
+        ...(query.kinds === undefined ? {} : { kinds: query.kinds }),
+        limit: pageSize,
+        order: 'ascending'
+      })
+      records.push(...page)
+      if (page.length < pageSize) {
+        break
+      }
+      const last = page.at(-1)
+      if (last === undefined || last.sequence <= cursor) {
+        throw new Error('Audit Journal pagination did not advance')
+      }
+      cursor = last.sequence
+    }
+    return records
+  }
+
   readExternalReceipts(): EventReceipt[] {
     this.#assertOpen()
     const rows = this.#database
@@ -127,7 +152,15 @@ export class SqliteAuditReader {
     if (snapshots.length === 0) {
       throw new Error('State history has no foundation snapshot')
     }
-    const records = this.readJournal({ limit: 100_000 })
+    const records = this.readAllJournal()
+    const maximumSequence = (
+      this.#database.prepare('SELECT COALESCE(MAX(sequence), 0) AS maximum_sequence FROM journal_records').get() as {
+        maximum_sequence: number
+      }
+    ).maximum_sequence
+    if ((records.at(-1)?.sequence ?? 0) !== maximumSequence) {
+      throw new Error('Independent audit did not read the complete Journal tail')
+    }
     for (const [index, record] of records.entries()) {
       if (record.sequence !== index + 1) {
         throw new Error(`Journal sequence gap at ${index + 1}`)
@@ -208,6 +241,20 @@ export class SqliteAuditReader {
       mediaType: row.media_type,
       provenance: provenanceSchema.parse(parseJson(row.provenance_json)) as Provenance
     }
+  }
+
+  readAuditBlobs(): AuditBlob[] {
+    this.#assertOpen()
+    const hashes = this.#database
+      .prepare('SELECT content_hash FROM audit_blobs ORDER BY content_hash')
+      .all() as unknown as Array<{ content_hash: string }>
+    return hashes.map(({ content_hash }) => {
+      const blob = this.getAuditBlob(content_hash)
+      if (blob === undefined) {
+        throw new Error(`Audit blob disappeared during scan: ${content_hash}`)
+      }
+      return blob
+    })
   }
 
   getAuditBlobProvenances(contentHash: string): Provenance[] {

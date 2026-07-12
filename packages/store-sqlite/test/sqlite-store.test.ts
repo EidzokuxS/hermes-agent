@@ -228,7 +228,8 @@ describe('SQLite foundation', () => {
 
   it('returns an explicit newest-first Journal tail without freezing at the oldest records', async () => {
     let nextId = 0
-    const store = openStore(createPath(), {
+    const path = createPath()
+    const store = openStore(path, {
       idFactory: () => `record-tail-${(nextId += 1)}`,
       now: () => at
     })
@@ -248,6 +249,11 @@ describe('SQLite foundation', () => {
     }
     expect(tail.map(({ sequence }) => sequence)).toEqual(Array.from({ length: 64 }, (_, index) => 70 - index))
     store.close()
+    const audit = new SqliteAuditReader(path)
+    expect(audit.readAllJournal({ pageSize: 17 }).map(({ sequence }) => sequence)).toEqual(
+      Array.from({ length: 70 }, (_, index) => index + 1)
+    )
+    audit.close()
   })
 
   it('commits Journal and State atomically, then reopens at the exact cursor', async () => {
@@ -480,6 +486,10 @@ describe('SQLite foundation', () => {
       provenance: runtimeProvenance
     })
     store.close()
+
+    const audit = new SqliteAuditReader(path)
+    expect(audit.readAuditBlobs()).toMatchObject([{ bytes: Uint8Array.from([1, 2, 3]) }])
+    audit.close()
 
     const database = new DatabaseSync(path)
     expect(() => database.exec("UPDATE journal_records SET recorded_at = 'changed' WHERE sequence = 1")).toThrow(

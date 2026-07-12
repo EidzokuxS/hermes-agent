@@ -62,12 +62,20 @@ async function createWindow(): Promise<BrowserWindow> {
     window.maximize()
   }
   const saveState = debounce(() => {
+    if (window.isDestroyed()) {
+      return
+    }
     const bounds = window.getNormalBounds()
     void writeFile(statePath, JSON.stringify({ ...bounds, isMaximized: window.isMaximized() }), 'utf8')
   }, 250)
   window.on('move', saveState)
   window.on('resize', saveState)
-  window.on('close', saveState.flush)
+  window.once('close', () => {
+    window.off('move', saveState)
+    window.off('resize', saveState)
+    saveState.flush()
+  })
+  window.once('closed', saveState.cancel)
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', event => event.preventDefault())
   window.once('ready-to-show', () => window.show())

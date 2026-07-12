@@ -31,7 +31,7 @@ function parseJson(value: string): unknown {
 export function readRawDatabase(databasePath: string): RawAuditExport {
   const validated = new SqliteAuditReader(databasePath)
   const integrity = validated.integrityCheck()
-  const journal = validated.readJournal({ limit: 100_000 })
+  const journal = validated.readAllJournal()
   validated.close()
 
   const database = new DatabaseSync(databasePath, {

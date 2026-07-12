@@ -126,7 +126,7 @@ function computeWindowOptions(
 // Trailing debounce: collapse a burst of resize/move events (Linux fires many
 // mid-drag) into a single run `delayMs` after the last. `.flush()` runs now and
 // cancels the pending timer — used on close, before the window is gone.
-function debounce(fn: () => void, delayMs: number): (() => void) & { flush: () => void } {
+function debounce(fn: () => void, delayMs: number): (() => void) & { cancel: () => void; flush: () => void } {
   let timer: ReturnType<typeof setTimeout> | undefined
 
   const debounced = () => {
@@ -145,6 +145,13 @@ function debounce(fn: () => void, delayMs: number): (() => void) & { flush: () =
     }
     timer = undefined
     fn()
+  }
+
+  debounced.cancel = () => {
+    if (timer !== undefined) {
+      clearTimeout(timer)
+    }
+    timer = undefined
   }
 
   return debounced

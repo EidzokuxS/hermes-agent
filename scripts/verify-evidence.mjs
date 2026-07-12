@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { scanEvidenceFiles } from './evidence-secret-scan.mjs'
+import { mergeEvidenceScanReports, scanEvidenceDatabase, scanEvidenceFiles } from './evidence-secret-scan.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -87,7 +87,18 @@ const actual = (await filesBelow(bundle))
   .filter(file => file !== 'manifest.json')
 requireCondition(actual.length === expected.size, 'Bundle file set does not match the manifest')
 for (const file of actual) requireCondition(expected.has(file), `Unmanifested artifact: ${file}`)
-const redaction = await scanEvidenceFiles(actual.map(file => path.join(bundle, file)))
+const databaseRedactionReports = [
+  await inspectDatabaseCopy(path.join(bundle, 'deterministic/nox.sqlite'), scanEvidenceDatabase)
+]
+if (expected.has('real-pi/nox.sqlite')) {
+  databaseRedactionReports.push(
+    await inspectDatabaseCopy(path.join(bundle, 'real-pi/nox.sqlite'), scanEvidenceDatabase)
+  )
+}
+const redaction = mergeEvidenceScanReports(
+  await scanEvidenceFiles(actual.map(file => path.join(bundle, file))),
+  ...databaseRedactionReports
+)
 requireCondition(redaction.status === 'pass', 'Independent evidence secret scan failed')
 requireCondition(
   JSON.stringify({
@@ -149,7 +160,7 @@ requireCondition(
 const databaseEvidence = await inspectDatabaseCopy(path.join(bundle, 'deterministic/nox.sqlite'), databasePath => {
   const reader = new SqliteAuditReader(databasePath)
   try {
-    const databaseRecords = reader.readJournal({ limit: 100_000 })
+    const databaseRecords = reader.readAllJournal()
     const receipts = reader.readExternalReceipts()
     const inputBlobs = databaseRecords.flatMap(record => {
       if (record.entry.kind !== 'act.started') return []
@@ -256,6 +267,7 @@ for (const request of rpcRequests) {
 
 if (!deterministicOnly) {
   requireCondition(manifest.evidenceLane === 'full', 'Full verification requires a full real-Pi evidence lane')
+  requireCondition(manifest.sourceTreeDirty === false, 'Full verification requires evidence from a clean source tree')
   requireCondition(expected.has('real-pi/real-pi-run.json'), 'Full verification requires real-Pi evidence')
 }
 
@@ -278,6 +290,10 @@ if (expected.has('real-pi/real-pi-run.json')) {
   requireCondition(realRun.status === 'pass', 'Real Pi run did not pass')
   requireCondition(realRun.attemptsPerAct === 1, 'Real Pi run used more than one provider attempt per Act')
   requireCondition(Array.isArray(realRun.statuses) && realRun.statuses.length === 2, 'Real Pi terminals are incomplete')
+  requireCondition(
+    realRun.model === manifest.model?.id && realRun.provider === manifest.model?.provider,
+    'Real Pi report model identity does not match the manifest'
+  )
   const realTrace = await json(path.join(bundle, 'real-pi/causal-trace.json'))
   const realRecords = (realTrace.records ?? []).map(record => journalRecordSchema.parse(record))
   requireCondition(canonicalHash(realRecords) === realTrace.canonicalTraceHash, 'Real Pi causal trace hash mismatch')
@@ -291,7 +307,7 @@ if (expected.has('real-pi/real-pi-run.json')) {
   const realDatabaseEvidence = await inspectDatabaseCopy(path.join(bundle, 'real-pi/nox.sqlite'), databasePath => {
     const reader = new SqliteAuditReader(databasePath)
     try {
-      const databaseRecords = reader.readJournal({ limit: 100_000 })
+      const databaseRecords = reader.readAllJournal()
       const receipts = reader.readExternalReceipts()
       const inputBlobs = databaseRecords.flatMap(record => {
         if (record.entry.kind !== 'act.started') return []
@@ -310,6 +326,35 @@ if (expected.has('real-pi/real-pi-run.json')) {
   requireCondition(
     canonicalStringify(realDatabaseEvidence.records) === canonicalStringify(realRecords),
     'Real Pi causal trace does not match SQLite record-for-record'
+  )
+  const realStarts = realRecords.flatMap(record => (record.entry.kind === 'act.started' ? [record.entry.act] : []))
+  const realProposals = realRecords.flatMap(record =>
+    record.entry.kind === 'act.proposal-observed' ? [record.entry] : []
+  )
+  const realTerminals = realRecords.flatMap(record =>
+    record.entry.kind === 'act.terminal' ? [record.entry.terminal] : []
+  )
+  requireCondition(realStarts.length === 2, 'Real Pi Journal must contain exactly two started Acts')
+  requireCondition(realProposals.length === 2, 'Real Pi Journal must contain exactly two observed proposals')
+  requireCondition(realTerminals.length === 2, 'Real Pi Journal must contain exactly two terminal Acts')
+  for (const started of realStarts) {
+    requireCondition(started.modelId === manifest.model.id, `Real Pi Act ${started.actId} used the wrong model`)
+    const proposals = realProposals.filter(proposal => proposal.actId === started.actId)
+    const terminals = realTerminals.filter(terminal => terminal.actId === started.actId)
+    requireCondition(proposals.length === 1, `Real Pi Act ${started.actId} does not have exactly one proposal`)
+    requireCondition(
+      proposals[0].result.kind === 'proposed',
+      `Real Pi Act ${started.actId} did not produce a schema-valid proposal`
+    )
+    requireCondition(terminals.length === 1, `Real Pi Act ${started.actId} does not have exactly one terminal`)
+    requireCondition(
+      terminals[0].status === 'completed-effects' || terminals[0].status === 'completed-silent',
+      `Real Pi Act ${started.actId} did not terminate successfully`
+    )
+  }
+  requireCondition(
+    canonicalStringify(realRun.statuses) === canonicalStringify(realTerminals.map(terminal => terminal.status)),
+    'Real Pi report statuses do not match Journal terminals'
   )
   const realRestart = await json(path.join(bundle, 'real-pi/process-restart.json'))
   requireCondition(realRestart.pidsDiffer === true, 'Real Pi runtime restart reused its PID')
@@ -368,6 +413,9 @@ requireCondition(
 const versions = await json(path.join(bundle, 'versions.json'))
 requireCondition(versions.dependencyLockSha256 === manifest.dependencyLockSha256, 'Lockfile hash mismatch')
 requireCondition(versions.sourceCommit === manifest.sourceCommit, 'Source commit mismatch')
+if (!deterministicOnly) {
+  requireCondition(versions.sourceTreeDirty === false, 'Full verification versions report a dirty source tree')
+}
 const pinnedNode = (await readFile(path.join(root, '.node-version'), 'utf8')).trim()
 requireCondition(versions.node === `v${pinnedNode}`, `Evidence used ${versions.node}; pinned Node is v${pinnedNode}`)
 

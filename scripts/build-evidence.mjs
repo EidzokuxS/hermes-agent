@@ -8,7 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { spawnSync } from 'node:child_process'
 
 import { checkKillCriteria } from './check-kill-criteria.mjs'
-import { scanEvidenceFiles } from './evidence-secret-scan.mjs'
+import { mergeEvidenceScanReports, scanEvidenceDatabase, scanEvidenceFiles } from './evidence-secret-scan.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 
@@ -385,7 +385,7 @@ try {
   evidenceStore.close()
   const audit = verifyAuditDatabase(databaseTarget, desktopFlow.afterRestart.stateVersion)
   const reader = new SqliteAuditReader(databaseTarget)
-  const records = reader.readJournal()
+  const records = reader.readAllJournal()
   const receipts = reader.readExternalReceipts()
   const beforeSnapshot = reader.loadSnapshot(desktopFlow.beforeRestart.stateVersion)
   const afterSnapshot = reader.loadSnapshot(desktopFlow.afterRestart.stateVersion)
@@ -502,7 +502,7 @@ try {
       await finalStore.createEvidenceCopy(realDatabaseTarget)
       finalStore.close()
       const realReader = new SqliteAuditReader(realDatabaseTarget)
-      const realRecords = realReader.readJournal()
+      const realRecords = realReader.readAllJournal()
       const realReceipts = realReader.readExternalReceipts()
       const realTerminals = realRecords.flatMap(record =>
         record.entry.kind === 'act.terminal' ? [record.entry.terminal] : []
@@ -619,13 +619,18 @@ try {
     'utf8'
   )
 
-  for (const databasePath of [databaseTarget, path.join(bundle, 'real-pi/nox.sqlite')]) {
+  const evidenceDatabases = [databaseTarget, path.join(bundle, 'real-pi/nox.sqlite')]
+  const databaseRedactionReports = []
+  for (const databasePath of evidenceDatabases) {
+    if (await stat(databasePath).catch(() => undefined)) {
+      databaseRedactionReports.push(await scanEvidenceDatabase(databasePath))
+    }
     await rm(`${databasePath}-shm`, { force: true })
     await rm(`${databasePath}-wal`, { force: true })
   }
 
   const artifactFiles = (await filesBelow(bundle)).filter(file => path.basename(file) !== 'manifest.json')
-  const redaction = await scanEvidenceFiles(artifactFiles)
+  const redaction = mergeEvidenceScanReports(await scanEvidenceFiles(artifactFiles), ...databaseRedactionReports)
   const artifacts = []
   for (const file of artifactFiles) {
     const bytes = await readFile(file)
