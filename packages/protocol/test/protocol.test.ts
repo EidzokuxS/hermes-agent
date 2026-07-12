@@ -63,6 +63,7 @@ describe('protocol v1 golden fixtures', () => {
 
   it('rejects State paths outside picture and workingField', () => {
     expect(statePathSchema.safeParse('/identity/revision').success).toBe(false)
+    expect(statePathSchema.safeParse('/workingField/__proto__/polluted').success).toBe(false)
     expect(statePathSchema.safeParse('/workingField/focus').success).toBe(true)
   })
 

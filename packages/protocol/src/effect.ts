@@ -7,6 +7,13 @@ export const statePathSchema = z
   .string()
   .max(512)
   .regex(/^\/(picture|workingField)(?:\/(?:[^~/]|~0|~1)+)*$/)
+  .refine(path => {
+    const tokens = path
+      .split('/')
+      .slice(1)
+      .map(token => token.replaceAll('~1', '/').replaceAll('~0', '~'))
+    return !tokens.some(token => ['__proto__', 'constructor', 'prototype'].includes(token))
+  }, 'State path contains a forbidden object key')
 
 export const statePatchEffectSchema = z
   .object({

@@ -17,6 +17,14 @@ export {
 } from './continuation.js'
 export type { Continuation, ContinuationSeed, OpenContinuation } from './continuation.js'
 export {
+  CORTEX_INPUT_BUILDER_VERSION,
+  CORTEX_INPUT_SCHEMA_VERSION,
+  cortexBoundsSchema,
+  cortexInputSchema,
+  cortexJournalItemSchema
+} from './cortex-input.js'
+export type { CortexBounds, CortexInput, CortexJournalItem } from './cortex-input.js'
+export {
   continuationCancelEffectSchema,
   continuationFireEffectSchema,
   continuationScheduleEffectSchema,
