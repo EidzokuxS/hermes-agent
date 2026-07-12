@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 2,
+  "source": {
+    "repository": "https://github.com/NousResearch/hermes-agent",
+    "commit": "4281151ae859241351ba14d8c7682dc67ff4c126",
+    "tree": "735e875e12c18ebf3d6b2dd26928d72d155455d0",
+    "desktopVersion": "0.17.0",
+    "license": "MIT",
+    "fileCount": 6250
+  },
+  "migrationBase": {
+    "repositoryCommit": "833dafc34bd7c37b99bf26110419c7edade1af76",
+    "rollbackTag": "nox-causal-loop-proven-v1",
+    "trackedFileCount": 233
+  },
+  "policy": {
+    "mode": "full-tree-foundation",
+    "defaultForSourceTree": "upstream",
+    "defaultForMigrationBaseOnly": "retained-nox",
+    "productionDesktop": "apps/desktop",
+    "productionAgentLoop": "hermes-agent",
+    "shadowCortexAllowed": false
+  },
+  "collisions": {
+    "count": 36,
+    "upstreamReplacement": [
+      "apps/desktop/**"
+    ],
+    "adaptedImmediately": [
+      ".gitignore",
+      "package.json",
+      "package-lock.json"
+    ],
+    "retainedNoxUntilTask1Merge": [
+      "AGENTS.md"
+    ]
+  },
+  "retainedNoxRoots": [
+    ".node-version",
+    "NOX-CONCEPT-CODEX.md",
+    "NOX-CONVERGENCE.md",
+    "NOX-DEBATE-*.md",
+    "apps/audit/**",
+    "apps/runtime/**",
+    "artifacts/evidence/first-causal-loop/.gitkeep",
+    "docs/architecture/**",
+    "docs/goals/**",
+    "docs/upstream/hermes-desktop-slice.json",
+    "packages/**",
+    "rpi/**",
+    "tasks/**",
+    "tests/e2e/**",
+    "tests/integration/**",
+    "tests/live/**",
+    "tsconfig.base.json",
+    "tsconfig.json",
+    "vitest.config.ts",
+    "vitest.workspace.ts"
+  ],
+  "retainedNoxExecution": {
+    "workspaceStatus": "source-only",
+    "productionReachability": "forbidden",
+    "deviation": "docs/goals/nox-hermes-foundation-migration/DEVIATIONS.md#d-001--retained-typescript-causal-loop-is-source-only-during-the-hermes-baseline"
+  },
+  "closedPaths": [
+    "NOX-RETHINK.md",
+    "REFERENCE ONLY/**"
+  ],
+  "verification": {
+    "status": "pending-task-0-baseline",
+    "report": "docs/upstream/HERMES-BASELINE.md"
+  }
+}

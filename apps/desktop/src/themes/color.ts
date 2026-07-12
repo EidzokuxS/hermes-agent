@@ -46,9 +46,7 @@ export function relativeLuminance(hex: string): number {
     return 0
   }
 
-  const r = linearize(rgb[0] / 255)
-  const g = linearize(rgb[1] / 255)
-  const b = linearize(rgb[2] / 255)
+  const [r, g, b] = rgb.map(v => linearize(v / 255))
 
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }
@@ -99,9 +97,7 @@ export function luminance(hex: string): number {
     return 0
   }
 
-  const r = rgb[0] / 255
-  const g = rgb[1] / 255
-  const b = rgb[2] / 255
+  const [r, g, b] = rgb.map(v => v / 255)
 
   return 0.2126 * r + 0.7152 * g + 0.0722 * b
 }

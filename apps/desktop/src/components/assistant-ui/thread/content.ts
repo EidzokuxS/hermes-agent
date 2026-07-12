@@ -59,5 +59,5 @@ export function pickPrimaryPreviewTarget(targets: string[]): string[] {
 
   const localUrl = targets.find(value => /^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])/i.test(value))
 
-  return [localUrl ?? targets.at(-1)!]
+  return [localUrl || targets[targets.length - 1]]
 }

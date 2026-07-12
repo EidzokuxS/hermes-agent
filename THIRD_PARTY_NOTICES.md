@@ -33,9 +33,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## Hermes Agent Desktop
+## Hermes Agent
 
-Nox derives the presentation files and patterns listed in `docs/upstream/hermes-desktop-slice.json` from Hermes Agent at commit `4281151ae859241351ba14d8c7682dc67ff4c126`.
+Nox uses the full Hermes Agent source tree as its product foundation at commit `4281151ae859241351ba14d8c7682dc67ff4c126` (Desktop `0.17.0`). Import provenance and the retained/adapted Nox boundaries are recorded in `docs/upstream/hermes-foundation.json`. The older `docs/upstream/hermes-desktop-slice.json` describes the superseded first-loop donor slice and remains historical until the final migration cutover.
 
 Source: `https://github.com/NousResearch/hermes-agent`
 

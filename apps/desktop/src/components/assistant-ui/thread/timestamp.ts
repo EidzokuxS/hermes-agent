@@ -1,4 +1,4 @@
-import { fmtClock, fmtDayTime } from '../../../lib/time.js'
+import { fmtClock, fmtDayTime } from '@/lib/time'
 
 function startOfDay(d: Date): number {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()

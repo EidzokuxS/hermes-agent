@@ -1,10 +1,20 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "./tsconfig.json",
   "compilerOptions": {
-    "outDir": "dist/electron",
-    "rootDir": "electron",
-    "tsBuildInfoFile": "dist/electron.tsbuildinfo"
+    "strict": false,
+    "noImplicitAny": false,
+    "noImplicitThis": false,
+    "strictNullChecks": false,
+    "strictFunctionTypes": false,
+    "strictBindCallApply": false,
+    "strictPropertyInitialization": false,
+    "noUncheckedIndexedAccess": false,
+    "exactOptionalPropertyTypes": false,
+    "ignoreDeprecations": "6.0",
+    "composite": true,
+    "declaration": true,
+    "outDir": "build/electron-types"
   },
-  "include": ["electron/**/*.ts", "electron/**/*.cts"],
-  "references": [{ "path": "../../packages/protocol" }, { "path": "../../packages/interface-rpc" }]
+  "include": ["electron"],
+  "exclude": ["src"]
 }

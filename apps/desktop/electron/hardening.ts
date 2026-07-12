@@ -4,67 +4,136 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const DEFAULT_FETCH_TIMEOUT_MS = 15_000
+const DATA_URL_READ_MAX_BYTES = 16 * 1024 * 1024
+const TEXT_PREVIEW_SOURCE_MAX_BYTES = 64 * 1024 * 1024
+
 const SAFE_ENV_SUFFIXES = new Set(['dist', 'example', 'sample', 'template'])
 const SENSITIVE_EXTENSIONS = new Set(['.kdbx', '.p12', '.pem', '.pfx'])
 
-type IpcPathError = Error & { code: string }
-type StatFs = Pick<typeof fs, 'promises'>
+function resolveTimeoutMs(timeoutMs, fallbackMs = DEFAULT_FETCH_TIMEOUT_MS) {
+  const fallback =
+    Number.isFinite(fallbackMs) && Number(fallbackMs) > 0 ? Math.round(Number(fallbackMs)) : DEFAULT_FETCH_TIMEOUT_MS
 
-export function resolveTimeoutMs(timeoutMs: unknown, fallbackMs = DEFAULT_FETCH_TIMEOUT_MS): number {
-  const fallback = Number.isFinite(fallbackMs) && fallbackMs > 0 ? Math.round(fallbackMs) : DEFAULT_FETCH_TIMEOUT_MS
   const parsed = Number(timeoutMs)
-  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : fallback
+
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.round(parsed)
+  }
+
+  return fallback
 }
 
-export function sensitiveFileBlockReason(filePath: unknown): string | null {
-  const normalized = String(filePath ?? '')
+function encryptDesktopSecret(value, safeStorageApi) {
+  const raw = String(value || '')
+
+  if (!raw) {
+    return null
+  }
+
+  let encryptionAvailable = false
+
+  try {
+    encryptionAvailable = Boolean(safeStorageApi?.isEncryptionAvailable?.())
+  } catch {
+    encryptionAvailable = false
+  }
+
+  if (!encryptionAvailable) {
+    throw new Error(
+      'Secure token storage is unavailable, so Hermes Desktop cannot save remote gateway tokens. ' +
+        'Set HERMES_DESKTOP_REMOTE_URL and HERMES_DESKTOP_REMOTE_TOKEN in your environment, or enable OS keychain access and try again.'
+    )
+  }
+
+  try {
+    return {
+      encoding: 'safeStorage',
+      value: safeStorageApi.encryptString(raw).toString('base64')
+    }
+  } catch (error) {
+    const detail = error instanceof Error && error.message ? ` (${error.message})` : ''
+    throw new Error(
+      `Failed to encrypt the remote gateway token for secure storage${detail}. ` +
+        'Set HERMES_DESKTOP_REMOTE_URL and HERMES_DESKTOP_REMOTE_TOKEN in your environment as a fallback.'
+    )
+  }
+}
+
+function sensitiveFileBlockReason(filePath) {
+  const normalized = String(filePath || '')
     .replace(/\\/g, '/')
     .toLowerCase()
+
   const basename = path.basename(normalized)
-  const extension = path.extname(basename)
+  const ext = path.extname(basename)
+
   if (!basename) {
     return null
   }
+
   if (normalized.includes('/.ssh/')) {
     return 'SSH key/config files are blocked.'
   }
+
   if (normalized.includes('/.gnupg/')) {
     return 'GPG key material is blocked.'
   }
+
   if (normalized.endsWith('/.aws/credentials')) {
     return 'AWS credential files are blocked.'
   }
+
   if (basename === '.env') {
     return '.env files are blocked because they commonly contain secrets.'
   }
-  if (basename.startsWith('.env.') && !SAFE_ENV_SUFFIXES.has(basename.slice('.env.'.length))) {
-    return `${basename} is blocked because it appears to contain environment secrets.`
+
+  if (basename.startsWith('.env.')) {
+    const suffix = basename.slice('.env.'.length)
+
+    if (!SAFE_ENV_SUFFIXES.has(suffix)) {
+      return `${basename} is blocked because it appears to contain environment secrets.`
+    }
   }
+
   if (/^id_(rsa|dsa|ecdsa|ed25519)(?:\..+)?$/.test(basename) && !basename.endsWith('.pub')) {
     return 'SSH private key files are blocked.'
   }
-  if (SENSITIVE_EXTENSIONS.has(extension)) {
-    return `${extension} key/certificate files are blocked.`
+
+  if (SENSITIVE_EXTENSIONS.has(ext)) {
+    return `${ext} key/certificate files are blocked.`
   }
+
   if (basename === '.npmrc' || basename === '.netrc' || basename === '.pypirc') {
     return `${basename} is blocked because it may include auth credentials.`
   }
+
   return null
 }
 
-export function ipcPathError(code: string, message: string): IpcPathError {
-  return Object.assign(new Error(message), { code })
+function ipcPathError(code: any, message: string): Error & { code: any } {
+  const error = new Error(message) as Error & { code: any }
+  ;(error as any).code = code
+
+  return error
 }
 
-export function rejectUnsafePathSyntax(filePath: unknown, purpose = 'File read'): string {
-  if (typeof filePath !== 'string' || !filePath.trim()) {
+function rejectUnsafePathSyntax(filePath, purpose = 'File read') {
+  if (typeof filePath !== 'string') {
     throw ipcPathError('invalid-path', `${purpose} failed: file path is required.`)
   }
+
   const raw = filePath.trim()
+
+  if (!raw) {
+    throw ipcPathError('invalid-path', `${purpose} failed: file path is required.`)
+  }
+
   if (raw.includes('\0')) {
     throw ipcPathError('invalid-path', `${purpose} failed: file path is invalid.`)
   }
+
   const normalized = raw.replace(/\\/g, '/').toLowerCase()
+
   if (
     normalized.startsWith('//?/') ||
     normalized.startsWith('//./') ||
@@ -73,109 +142,175 @@ export function rejectUnsafePathSyntax(filePath: unknown, purpose = 'File read')
   ) {
     throw ipcPathError('device-path', `${purpose} blocked: Windows device paths are not allowed.`)
   }
+
   return raw
 }
 
-export interface ResolvePathOptions {
-  baseDir?: string
-  purpose?: string
-}
-
-export function resolveRequestedPathForIpc(filePath: unknown, options: ResolvePathOptions = {}): string {
-  const purpose = options.purpose ?? 'File read'
+function resolveRequestedPathForIpc(filePath, options: { purpose?: string; baseDir?: fs.PathOrFileDescriptor } = {}) {
+  const purpose = String(options.purpose || 'File read')
   let raw = rejectUnsafePathSyntax(filePath, purpose)
+
+  // Gateway-reported cwds (config `terminal.cwd`, remote sessions) routinely
+  // arrive as `~/...`. Node's fs has no shell — without expansion the path
+  // resolves under process.cwd() and every read "ENOENT"s forever.
   if (raw === '~' || raw.startsWith('~/') || raw.startsWith('~\\')) {
     raw = path.join(os.homedir(), raw.slice(1))
   }
+
   if (/^file:/i.test(raw)) {
+    let resolvedPath
+
     try {
       const parsed = new URL(raw)
+
       if (parsed.protocol !== 'file:') {
         throw new Error('not a file URL')
       }
-      return path.resolve(rejectUnsafePathSyntax(fileURLToPath(parsed), purpose))
+
+      resolvedPath = fileURLToPath(parsed)
     } catch {
       throw ipcPathError('invalid-path', `${purpose} failed: file URL is invalid.`)
     }
+
+    rejectUnsafePathSyntax(resolvedPath, purpose)
+
+    return path.resolve(resolvedPath)
   }
-  const base = rejectUnsafePathSyntax(options.baseDir ?? process.cwd(), purpose)
-  return path.resolve(path.resolve(base), raw)
+
+  const baseInput = typeof options.baseDir === 'string' && options.baseDir.trim() ? options.baseDir : process.cwd()
+  const safeBaseInput = rejectUnsafePathSyntax(baseInput, purpose)
+  const resolvedBase = path.resolve(safeBaseInput)
+  rejectUnsafePathSyntax(resolvedBase, purpose)
+  const resolvedPath = path.resolve(resolvedBase, raw)
+  rejectUnsafePathSyntax(resolvedPath, purpose)
+
+  return resolvedPath
 }
 
-export async function statForIpc(fsImpl: StatFs, resolvedPath: string, purpose: string, typeLabel: string) {
+async function statForIpc(fsImpl: { promises: { stat: typeof fs.promises.stat } }, resolvedPath, purpose, typeLabel) {
   try {
     return await fsImpl.promises.stat(resolvedPath)
   } catch (error) {
-    const code = error instanceof Error && 'code' in error ? String(error.code) : 'read-error'
+    const code = error && typeof error === 'object' ? error.code : ''
+
     if (code === 'ENOENT' || code === 'ENOTDIR') {
-      throw ipcPathError(code, `${purpose} failed: ${typeLabel} does not exist.`)
+      throw ipcPathError(code || 'ENOENT', `${purpose} failed: ${typeLabel} does not exist.`)
     }
-    throw ipcPathError(code, `${purpose} failed: ${error instanceof Error ? error.message : String(error)}`)
+
+    throw ipcPathError(
+      code || 'read-error',
+      `${purpose} failed: ${error instanceof Error ? error.message : String(error)}`
+    )
   }
 }
 
-export async function realpathForIpc(fsImpl: StatFs, resolvedPath: string, purpose: string): Promise<string> {
+async function realpathForIpc(fsImpl, resolvedPath, purpose) {
+  if (typeof fsImpl.promises.realpath !== 'function') {
+    return resolvedPath
+  }
+
   try {
     const realPath = await fsImpl.promises.realpath(resolvedPath)
-    return rejectUnsafePathSyntax(realPath, purpose)
+    rejectUnsafePathSyntax(realPath, purpose)
+
+    return realPath
   } catch (error) {
-    const code = error instanceof Error && 'code' in error ? String(error.code) : 'read-error'
-    throw ipcPathError(code, `${purpose} failed: ${error instanceof Error ? error.message : String(error)}`)
+    const code = error && typeof error === 'object' ? error.code : ''
+    throw ipcPathError(
+      code || 'read-error',
+      `${purpose} failed: ${error instanceof Error ? error.message : String(error)}`
+    )
   }
 }
 
-export function rejectSensitiveFilePath(filePath: string, purpose: string): void {
-  const reason = sensitiveFileBlockReason(filePath)
-  if (reason) {
-    throw ipcPathError('sensitive-file', `${purpose} blocked for sensitive file: ${reason}`)
+function rejectSensitiveFilePath(filePath, purpose) {
+  const blockReason = sensitiveFileBlockReason(filePath)
+
+  if (blockReason) {
+    throw ipcPathError('sensitive-file', `${purpose} blocked for sensitive file: ${blockReason}`)
   }
 }
 
-export async function resolveDirectoryForIpc(
-  directoryPath: unknown,
-  options: ResolvePathOptions & { fs?: StatFs } = {}
+async function resolveDirectoryForIpc(
+  dirPath,
+  options: {
+    purpose?: string
+    baseDir?: fs.PathOrFileDescriptor
+    fs?: { promises: { stat: typeof fs.promises.stat } }
+  } = {}
 ) {
-  const purpose = options.purpose ?? 'Directory read'
-  const fsImpl = options.fs ?? fs
-  const resolvedPath = resolveRequestedPathForIpc(directoryPath, options)
+  const purpose = String(options.purpose || 'Directory read')
+  const fsImpl = options.fs || fs
+  const resolvedPath = resolveRequestedPathForIpc(dirPath, { baseDir: options.baseDir, purpose })
   const stat = await statForIpc(fsImpl, resolvedPath, purpose, 'directory')
+
   if (!stat.isDirectory()) {
     throw ipcPathError('ENOTDIR', `${purpose} failed: path is not a directory.`)
   }
-  return { realPath: await realpathForIpc(fsImpl, resolvedPath, purpose), resolvedPath, stat }
+
+  const realPath = await realpathForIpc(fsImpl, resolvedPath, purpose)
+
+  return { realPath, resolvedPath, stat }
 }
 
-export async function resolveReadableFileForIpc(
-  filePath: unknown,
-  options: ResolvePathOptions & { blockSensitive?: boolean; fs?: typeof fs; maxBytes?: number } = {}
+async function resolveReadableFileForIpc(
+  filePath,
+  options: {
+    purpose?: string
+    baseDir?: fs.PathOrFileDescriptor
+    fs?: typeof fs
+    blockSensitive?: boolean
+    maxBytes?: number
+  } = {}
 ) {
-  const purpose = options.purpose ?? 'File read'
-  const fsImpl = options.fs ?? fs
-  const resolvedPath = resolveRequestedPathForIpc(filePath, options)
+  const purpose = String(options.purpose || 'File read')
+  const fsImpl = options.fs || fs
+  const resolvedPath = resolveRequestedPathForIpc(filePath, { baseDir: options.baseDir, purpose })
+
   if (options.blockSensitive !== false) {
     rejectSensitiveFilePath(resolvedPath, purpose)
   }
+
   const stat = await statForIpc(fsImpl, resolvedPath, purpose, 'file')
+
   if (stat.isDirectory()) {
     throw ipcPathError('EISDIR', `${purpose} failed: path points to a directory.`)
   }
+
   if (!stat.isFile()) {
     throw ipcPathError('EINVAL', `${purpose} failed: only regular files can be read.`)
   }
+
   const realPath = await realpathForIpc(fsImpl, resolvedPath, purpose)
+
   if (options.blockSensitive !== false) {
     rejectSensitiveFilePath(realPath, purpose)
   }
-  if (options.maxBytes !== undefined && stat.size > options.maxBytes) {
-    throw ipcPathError(
-      'EFBIG',
-      `${purpose} failed: file is too large (${stat.size} bytes; limit ${options.maxBytes} bytes).`
-    )
+
+  const maxBytes = Number.isFinite(options.maxBytes) && Number(options.maxBytes) > 0 ? Number(options.maxBytes) : null
+
+  if (maxBytes && stat.size > maxBytes) {
+    throw ipcPathError('EFBIG', `${purpose} failed: file is too large (${stat.size} bytes; limit ${maxBytes} bytes).`)
   }
+
   try {
     await fsImpl.promises.access(resolvedPath, fs.constants.R_OK)
   } catch {
     throw ipcPathError('EACCES', `${purpose} failed: file is not readable.`)
   }
+
   return { realPath, resolvedPath, stat }
+}
+
+export {
+  DATA_URL_READ_MAX_BYTES,
+  DEFAULT_FETCH_TIMEOUT_MS,
+  encryptDesktopSecret,
+  rejectUnsafePathSyntax,
+  resolveDirectoryForIpc,
+  resolveReadableFileForIpc,
+  resolveRequestedPathForIpc,
+  resolveTimeoutMs,
+  sensitiveFileBlockReason,
+  TEXT_PREVIEW_SOURCE_MAX_BYTES
 }
