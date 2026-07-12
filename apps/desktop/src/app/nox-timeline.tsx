@@ -37,8 +37,8 @@ export function NoxTimeline({
     return (
       <div className="timeline-empty">
         <span aria-hidden="true" className="timeline-empty__glyph codicon codicon-comment-discussion" />
-        <h2>No activity yet</h2>
-        <p>Send a message below. Nox may reply, update its state, schedule a follow-up, or take no action.</p>
+        <h2>No messages yet</h2>
+        <p>Send a message to begin.</p>
       </div>
     )
   }
@@ -98,7 +98,7 @@ export function NoxTimeline({
           ))}
           {item.terminal?.status === 'completed-silent' && (
             <div className="silent-settlement">
-              <span aria-hidden="true" className="codicon codicon-check" /> Completed without a reply.
+              <span aria-hidden="true" className="codicon codicon-check" /> Completed.
             </div>
           )}
           {item.terminal !== undefined &&

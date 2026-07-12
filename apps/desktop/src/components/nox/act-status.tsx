@@ -5,7 +5,7 @@ import { Badge } from '../ui/badge.js'
 const terminalLabels: Record<ActTerminal['status'], string> = {
   cancelled: 'Cancelled',
   'completed-effects': 'Done',
-  'completed-silent': 'Done · no reply',
+  'completed-silent': 'Done',
   failed: 'Failed',
   interrupted: 'Interrupted',
   rejected: 'Not accepted'

@@ -141,7 +141,7 @@ export function NoxShell() {
                 <div className="empty-stage__copy">
                   <span>{view.modelId || 'Nox'}</span>
                   <h2>NOX</h2>
-                  <p>Send a message. Nox decides whether and how to respond.</p>
+                  <p>Send a message to Nox.</p>
                 </div>
               </div>
             ) : (

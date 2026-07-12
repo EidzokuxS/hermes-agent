@@ -129,7 +129,7 @@ describe('Nox shell vertical', () => {
       observedAt: now,
       protocolVersion: 1
     })
-    await waitFor(() => expect(screen.getByText('Completed without a reply.')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Completed.')).toBeTruthy())
     health?.({ message: 'Continuation loop failed', status: 'unhealthy' })
     await waitFor(() => expect(document.querySelector('.runtime-presence')?.textContent).toBe('Needs attention'))
     expect(screen.getByRole('alert').textContent).toContain('Continuation loop failed')
