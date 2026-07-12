@@ -33,6 +33,7 @@ export interface RpcRuntimePort {
   }): Promise<EventReceipt>
   cancelAct(actId: string, reason: string): Promise<boolean>
   journal(afterSequence?: number): Promise<JournalRecord[]>
+  journalTail(limit?: number): Promise<JournalRecord[]>
   releaseEvent(eventId: string): Promise<void>
   snapshot(): Promise<StateSnapshot>
   unresolvedReceipts(interfaceOwnerId: string): Promise<EventReceipt[]>
@@ -176,7 +177,7 @@ export function projectInterfaceEvents(records: JournalRecord[]): InterfaceEvent
 async function buildView(runtime: RpcRuntimePort, interfaceOwnerId: string): Promise<ViewSnapshot> {
   const [state, records, unresolvedReceipts] = await Promise.all([
     runtime.snapshot(),
-    runtime.journal(),
+    runtime.journalTail(4_096),
     runtime.unresolvedReceipts(interfaceOwnerId)
   ])
   const running = new Map<string, Extract<InterfaceEvent, { kind: 'act.started' }>['act']>()

@@ -13,11 +13,22 @@ export interface NoxRuntimeProcess {
   stop(): Promise<void>
 }
 
+export interface RuntimeProcessDiagnostic {
+  message: string
+}
+
+export interface RuntimeProcessExit {
+  code: number | null
+  signal: NodeJS.Signals | null
+}
+
 export interface LaunchNoxRuntimeOptions {
   dataDirectory: string
   interfaceOwnerId: string
   launchToken: string
   model?: string
+  onDiagnostic?: (diagnostic: RuntimeProcessDiagnostic) => void
+  onExit?: (result: RuntimeProcessExit) => void
   provider?: string
   runtimeEntry?: string
 }
@@ -63,6 +74,8 @@ export async function launchNoxRuntime(options: LaunchNoxRuntimeOptions): Promis
       stdio: ['ignore', 'pipe', 'pipe']
     }
   )
+  let announced = false
+  let stopping = false
   if (process.env.NOX_DESKTOP_RUNTIME_PID_FILE !== undefined) {
     if (child.pid === undefined) {
       throw new Error('Nox runtime process has no PID')
@@ -77,7 +90,11 @@ export async function launchNoxRuntime(options: LaunchNoxRuntimeOptions): Promis
       reject(new Error(`Nox runtime exited before ready (${code}): ${stderr}`))
     child.once('exit', onExit)
     child.stderr.on('data', chunk => {
-      stderr = `${stderr}${String(chunk)}`.slice(-8_192)
+      const message = String(chunk).slice(-2_048)
+      stderr = `${stderr}${message}`.slice(-8_192)
+      if (announced && !stopping) {
+        options.onDiagnostic?.({ message })
+      }
     })
     child.stdout.on('data', chunk => {
       stdout += String(chunk)
@@ -91,12 +108,19 @@ export async function launchNoxRuntime(options: LaunchNoxRuntimeOptions): Promis
       }
       child.off('exit', onExit)
       try {
-        resolve(parseAnnouncement(stdout.slice(0, newline)))
+        const parsed = parseAnnouncement(stdout.slice(0, newline))
+        announced = true
+        resolve(parsed)
       } catch (error) {
         reject(error)
       }
     })
     child.once('error', reject)
+  })
+  child.on('exit', (code, signal) => {
+    if (announced && !stopping) {
+      options.onExit?.({ code, signal })
+    }
   })
 
   return {
@@ -105,6 +129,7 @@ export async function launchNoxRuntime(options: LaunchNoxRuntimeOptions): Promis
       if (child.exitCode !== null || child.signalCode !== null) {
         return
       }
+      stopping = true
       await new Promise<void>(resolve => {
         child.once('exit', () => resolve())
         child.kill()

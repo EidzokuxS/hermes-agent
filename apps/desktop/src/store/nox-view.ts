@@ -31,6 +31,7 @@ export interface NoxViewState {
   error?: string
   items: NoxTimelineItem[]
   journalCursor: number
+  runtimeUnhealthy: boolean
   stateHash: string
   stateVersion: number
 }
@@ -41,6 +42,7 @@ const initialState: NoxViewState = {
   continuations: [],
   items: [],
   journalCursor: 0,
+  runtimeUnhealthy: false,
   stateHash: '',
   stateVersion: 0
 }
@@ -119,6 +121,7 @@ export function hydrateNoxView(view: ViewSnapshot): void {
     continuations: view.openContinuations,
     items,
     journalCursor: view.journalCursor,
+    runtimeUnhealthy: false,
     stateHash: view.state.stateHash,
     stateVersion: view.state.stateVersion
   })
@@ -216,6 +219,17 @@ export function setConnectionError(error: unknown): void {
   })
 }
 
+export function setRuntimeUnhealthy(message: string): void {
+  const state = $noxView.get()
+  $noxView.set({
+    ...state,
+    connected: false,
+    connecting: false,
+    error: message,
+    runtimeUnhealthy: true
+  })
+}
+
 export function loadFixtureView(outcome = 'emitted'): void {
   const now = Date.now()
   $noxView.set({
@@ -268,6 +282,7 @@ export function loadFixtureView(outcome = 'emitted'): void {
       }
     ],
     journalCursor: 47,
+    runtimeUnhealthy: false,
     stateHash: `sha256:${'a'.repeat(64)}`,
     stateVersion: 12
   })

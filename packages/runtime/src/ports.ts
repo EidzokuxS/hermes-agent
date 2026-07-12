@@ -37,7 +37,14 @@ export interface AuditBlobReceipt {
   contentHash: string
 }
 
+export interface EventReleaseState {
+  admitted: boolean
+  event: ExternalEvent
+  hasAct: boolean
+}
+
 export interface StorePort {
+  getEventReleaseState(eventId: string): Promise<EventReleaseState | undefined>
   getUnresolvedReceipts(interfaceOwnerId: string): Promise<EventReceipt[]>
   loadSnapshot(): Promise<StateSnapshot>
   putAuditBlob(input: AuditBlobInput): Promise<AuditBlobReceipt>

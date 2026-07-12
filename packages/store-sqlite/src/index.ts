@@ -1,6 +1,6 @@
 export { SqliteAuditReader } from './audit-reader.js'
 export type { StateHistoryReport } from './audit-reader.js'
-export { foundationMigration } from './migrations.js'
+export { foundationMigration, migrations, runtimeLookupMigration } from './migrations.js'
 export { FOUNDATION_MIGRATION_NAME, FOUNDATION_SCHEMA_VERSION } from './schema.js'
 export { SqliteStore } from './sqlite-store.js'
 export type { AuditBlob, FaultStage, JournalQuery, PutAuditBlobInput, SqliteStoreOptions } from './sqlite-store.js'

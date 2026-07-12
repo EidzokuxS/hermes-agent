@@ -97,21 +97,11 @@ export class NoxRuntime {
 
   async releaseEvent(eventId: string): Promise<void> {
     const event = await this.serialize(async () => {
-      const records = await this.#readAllJournal()
-      const recorded = records.find(
-        record => record.entry.kind === 'event.recorded' && record.entry.event.eventId === eventId
-      )
-      if (recorded?.entry.kind !== 'event.recorded') {
+      const release = await this.#store.getEventReleaseState(eventId)
+      if (release === undefined) {
         throw new Error(`Cannot release unknown Event: ${eventId}`)
       }
-      const alreadyAdmitted = records.some(
-        record =>
-          (record.entry.kind === 'event.admitted' && record.entry.eventId === eventId) ||
-          (record.entry.kind === 'event.recorded' &&
-            record.entry.event.eventId === eventId &&
-            record.entry.event.admission === 'admitted')
-      )
-      if (!alreadyAdmitted) {
+      if (!release.admitted) {
         const snapshot = await this.#store.loadSnapshot()
         await this.#store.transact({
           commandId: `event-admit:${eventId}`,
@@ -120,14 +110,10 @@ export class NoxRuntime {
           records: [runtimeRecord({ eventId, kind: 'event.admitted' }, this.#clock.now(), eventId)]
         })
       }
-      const hasAct = records.some(
-        record => record.entry.kind === 'act.started' && record.entry.act.input.triggerEventId === eventId
-      )
-      if (hasAct) {
+      if (release.hasAct) {
         return undefined
       }
-      const source = recorded.entry.event
-      return source.kind === 'external' ? { ...source, admission: 'admitted' as const } : source
+      return { ...release.event, admission: 'admitted' as const }
     })
     if (event !== undefined) {
       this.#enqueue(event)
@@ -195,8 +181,41 @@ export class NoxRuntime {
     return this.serialize(() => this.#store.getUnresolvedReceipts(interfaceOwnerId))
   }
 
+  async recordOperationalFailure(code: 'continuation-loop', message: string): Promise<void> {
+    const recordedAt = this.#clock.now()
+    const boundedMessage = message.slice(0, 1024) || 'Unknown continuation loop failure'
+    await this.serialize(async () => {
+      const snapshot = await this.#store.loadSnapshot()
+      await this.#store.transact({
+        commandId: `operational-failure:${canonicalHash({ code, message: boundedMessage, recordedAt })}`,
+        expectedStateVersion: snapshot.stateVersion,
+        protocolVersion: PROTOCOL_VERSION,
+        records: [
+          {
+            causal: { causeSequences: [] },
+            entry: { code, kind: 'runtime.operational-failure', message: boundedMessage },
+            journalSchemaVersion: 1,
+            protocolVersion: PROTOCOL_VERSION,
+            provenance: { component: 'nox-runtime', kind: 'runtime' },
+            recordedAt
+          }
+        ]
+      })
+    })
+  }
+
   async journal(afterSequence = 0): Promise<JournalRecord[]> {
     return this.serialize(() => this.#readAllJournal(afterSequence))
+  }
+
+  async journalTail(limit = 4_096): Promise<JournalRecord[]> {
+    return this.serialize(async () => {
+      const records: JournalRecord[] = []
+      for await (const record of this.#store.readJournal({ limit, order: 'descending' })) {
+        records.push(record)
+      }
+      return records.reverse()
+    })
   }
 
   async snapshot(): Promise<StateSnapshot> {

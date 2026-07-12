@@ -14,6 +14,16 @@ afterEach(() => {
 })
 
 describe('createRuntime', () => {
+  it('durably records a bounded operational failure without advancing State', async () => {
+    const harness = await createHarness([])
+    harnesses.push(harness)
+    await harness.runtime.recordOperationalFailure('continuation-loop', 'scheduler failed')
+    expect(await harness.runtime.journal()).toMatchObject([
+      { entry: { code: 'continuation-loop', kind: 'runtime.operational-failure', message: 'scheduler failed' } }
+    ])
+    expect((await harness.runtime.snapshot()).stateVersion).toBe(0)
+  })
+
   it('keeps retry identity stable even when observed time advances', async () => {
     const proposal = { effects: [], protocolVersion: 1, settlement: 'silent' } as const
     const harness = await createHarness([{ kind: 'proposed', proposal, proposalHash: canonicalHash(proposal) }])

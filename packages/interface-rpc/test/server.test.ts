@@ -95,6 +95,10 @@ class FakeRuntime implements RpcRuntimePort {
     return this.journalRecords.filter(({ sequence }) => sequence > afterSequence)
   }
 
+  async journalTail(limit = 4_096): Promise<JournalRecord[]> {
+    return this.journalRecords.slice(-limit)
+  }
+
   async releaseEvent(eventId: string): Promise<void> {
     this.order.push(`release:${eventId}`)
     if (this.releaseError !== undefined) {

@@ -31,7 +31,7 @@ function report(findings) {
   const secrets = findings.filter(({ kind }) => kind === 'configured-secret').length
   return {
     credentials,
-    findings: findings.map(finding => ({ ...finding, path: path.basename(finding.path) })),
+    findings: findings.map(finding => ({ ...finding, path: finding.path.replaceAll('\\', '/') })),
     hiddenReasoning,
     secrets,
     status: findings.length === 0 ? 'pass' : 'fail'

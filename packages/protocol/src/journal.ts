@@ -97,6 +97,14 @@ const lateOutputEntrySchema = z
   })
   .strict()
 
+const operationalFailureEntrySchema = z
+  .object({
+    code: z.literal('continuation-loop'),
+    kind: z.literal('runtime.operational-failure'),
+    message: z.string().min(1).max(1024)
+  })
+  .strict()
+
 export const journalEntrySchema = z.discriminatedUnion('kind', [
   actStartedEntrySchema,
   actTerminalEntrySchema,
@@ -106,6 +114,7 @@ export const journalEntrySchema = z.discriminatedUnion('kind', [
   eventAdmittedEntrySchema,
   eventRecordedEntrySchema,
   lateOutputEntrySchema,
+  operationalFailureEntrySchema,
   proposalObservedEntrySchema,
   stateAdvancedEntrySchema
 ])

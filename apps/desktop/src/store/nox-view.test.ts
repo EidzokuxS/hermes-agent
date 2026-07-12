@@ -39,6 +39,7 @@ beforeEach(() => {
     continuations: [],
     items: [],
     journalCursor: 0,
+    runtimeUnhealthy: false,
     stateHash: '',
     stateVersion: 0
   })

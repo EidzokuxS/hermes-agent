@@ -14,6 +14,7 @@ import type {
 } from '@nox/protocol'
 import { createRuntime } from '@nox/runtime'
 import type { AuditBlobInput, AuditBlobReceipt, JournalQuery, StorePort } from '@nox/runtime'
+import type { EventReleaseState } from '@nox/runtime'
 import { SqliteStore } from '@nox/store-sqlite'
 
 import { DeterministicClock } from './deterministic-clock.js'
@@ -89,6 +90,10 @@ class CrashInjectingStore implements StorePort {
 
   async getUnresolvedReceipts(interfaceOwnerId: string): Promise<EventReceipt[]> {
     return this.#store.getUnresolvedReceipts(interfaceOwnerId)
+  }
+
+  async getEventReleaseState(eventId: string): Promise<EventReleaseState | undefined> {
+    return this.#store.getEventReleaseState(eventId)
   }
 
   async loadSnapshot(): Promise<StateSnapshot> {

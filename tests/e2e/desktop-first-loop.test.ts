@@ -98,6 +98,7 @@ describe('Desktop first causal loop', () => {
       firstPid = await runtimePid(firstPidFile)
       process.kill(firstPid, 'SIGKILL')
       await waitForProcessExit(firstPid)
+      await first.page.getByText('runtime unhealthy').waitFor({ timeout: 5_000 })
     } finally {
       await first.application.close()
     }

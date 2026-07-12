@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { eventReceiptSchema, journalRecordSchema, provenanceSchema, stateSnapshotSchema } from '@nox/protocol'
 import type { EventReceipt, JournalRecord, Provenance, StateSnapshot } from '@nox/protocol'
 
-import { foundationMigration } from './migrations.js'
+import { migrations } from './migrations.js'
 import type { AuditBlobRow, JournalRow, MigrationRow, SnapshotRow } from './schema.js'
 import type { AuditBlob, JournalQuery } from './sqlite-store.js'
 
@@ -306,14 +306,19 @@ export class SqliteAuditReader {
     const rows = this.#database
       .prepare('SELECT version, name, checksum FROM schema_migrations ORDER BY version')
       .all() as unknown as MigrationRow[]
-    const [migration] = rows
     if (
-      rows.length !== 1 ||
-      migration?.version !== foundationMigration.version ||
-      migration.name !== foundationMigration.name ||
-      migration.checksum !== foundationMigration.checksum
+      rows.length !== migrations.length ||
+      rows.some((migration, index) => {
+        const expected = migrations[index]
+        return (
+          expected === undefined ||
+          migration.version !== expected.version ||
+          migration.name !== expected.name ||
+          migration.checksum !== expected.checksum
+        )
+      })
     ) {
-      throw new Error('Audit database schema does not match the Nox foundation schema')
+      throw new Error('Audit database schema does not match the Nox executable schema')
     }
   }
 }

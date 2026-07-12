@@ -16,6 +16,7 @@ import { app, BrowserWindow, ipcMain, screen, session } from 'electron'
 import { launchNoxRuntime } from './nox-runtime-process.js'
 import type { NoxRuntimeProcess } from './nox-runtime-process.js'
 import { isTrustedRendererUrl, resolveDevelopmentUrl } from './renderer-origin.js'
+import { sendToLiveWindow } from './window-lifecycle.js'
 import { computeWindowOptions, debounce, sanitizeWindowState } from './window-state.js'
 
 const INTERFACE_OWNER_ID = 'nox-desktop-primary'
@@ -31,6 +32,7 @@ let rpcClient: NoxRpcClient | undefined
 let subscriptionCursor = 0
 let subscriptionInFlight = false
 let subscriptionTimer: ReturnType<typeof setInterval> | undefined
+let lastRuntimeHealth: { message: string; reportedAt: number } | undefined
 
 async function readWindowState(filePath: string): Promise<unknown> {
   try {
@@ -76,6 +78,11 @@ async function createWindow(): Promise<BrowserWindow> {
     saveState.flush()
   })
   window.once('closed', saveState.cancel)
+  window.once('closed', () => {
+    if (mainWindow === window) {
+      mainWindow = undefined
+    }
+  })
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', event => event.preventDefault())
   window.once('ready-to-show', () => window.show())
@@ -182,6 +189,8 @@ async function startRuntime(): Promise<void> {
     interfaceOwnerId: INTERFACE_OWNER_ID,
     launchToken,
     ...(process.env.NOX_PI_MODEL ? { model: process.env.NOX_PI_MODEL } : {}),
+    onDiagnostic: diagnostic => reportRuntimeUnhealthy(diagnostic.message),
+    onExit: result => reportRuntimeUnhealthy(`Runtime process exited (${result.code ?? result.signal ?? 'unknown'})`),
     ...(process.env.NOX_PI_PROVIDER ? { provider: process.env.NOX_PI_PROVIDER } : {}),
     ...(process.env.NOX_RUNTIME_ENTRY ? { runtimeEntry: process.env.NOX_RUNTIME_ENTRY } : {})
   })
@@ -189,9 +198,23 @@ async function startRuntime(): Promise<void> {
   rpcClient.subscribe(event => {
     const parsed = interfaceEventSchema.parse(event)
     subscriptionCursor = Math.max(subscriptionCursor, parsed.journalSequence)
-    mainWindow?.webContents.send('nox:interface-event', parsed)
+    sendToLiveWindow(mainWindow, 'nox:interface-event', parsed)
   })
   await rpcClient.ready()
+}
+
+function reportRuntimeUnhealthy(message: string): void {
+  const bounded = message.trim().slice(0, 1_024) || 'Nox runtime became unhealthy'
+  const now = Date.now()
+  if (
+    lastRuntimeHealth !== undefined &&
+    lastRuntimeHealth.message === bounded &&
+    now - lastRuntimeHealth.reportedAt < 5_000
+  ) {
+    return
+  }
+  lastRuntimeHealth = { message: bounded, reportedAt: now }
+  sendToLiveWindow(mainWindow, 'nox:runtime-health', { message: bounded, status: 'unhealthy' })
 }
 
 installDomainHandlers()

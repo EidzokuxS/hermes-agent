@@ -339,6 +339,40 @@ export class SqliteStore {
     return rows.map(({ receipt_json }) => eventReceiptSchema.parse(parseJson(receipt_json)))
   }
 
+  async getEventReleaseState(eventId: string): Promise<
+    | {
+        admitted: boolean
+        event: ExternalEvent
+        hasAct: boolean
+      }
+    | undefined
+  > {
+    this.#assertOpen()
+    const row = this.#database
+      .prepare(
+        `SELECT receipt.event_json,
+                admission.event_id IS NOT NULL AS admitted,
+                EXISTS(
+                  SELECT 1
+                  FROM journal_records AS started
+                  WHERE started.entry_kind = 'act.started'
+                    AND json_extract(started.entry_json, '$.act.input.triggerEventId') = receipt.event_id
+                ) AS has_act
+         FROM external_event_receipts AS receipt
+         LEFT JOIN event_admissions AS admission ON admission.event_id = receipt.event_id
+         WHERE receipt.event_id = ?`
+      )
+      .get(eventId) as unknown as { admitted: number; event_json: string; has_act: number } | undefined
+    if (row === undefined) {
+      return undefined
+    }
+    return {
+      admitted: row.admitted === 1,
+      event: externalEventSchema.parse(parseJson(row.event_json)),
+      hasAct: row.has_act === 1
+    }
+  }
+
   async putAuditBlob(input: PutAuditBlobInput): Promise<AuditBlob> {
     this.#assertOpen()
     const provenance = provenanceSchema.parse(input.provenance)

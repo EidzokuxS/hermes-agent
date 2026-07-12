@@ -11,7 +11,8 @@ import {
   recordPendingRequest,
   recordRequestFailure,
   reduceInterfaceEvent,
-  setConnectionError
+  setConnectionError,
+  setRuntimeUnhealthy
 } from '../store/nox-view.js'
 import { appendNoxRequest, cancelNoxAct, connectNox } from '../transport/nox-client.js'
 
@@ -26,7 +27,7 @@ export function NoxShell() {
       return
     }
     let stop: (() => void) | undefined
-    void connectNox(hydrateNoxView, reduceInterfaceEvent)
+    void connectNox(hydrateNoxView, reduceInterfaceEvent, event => setRuntimeUnhealthy(event.message))
       .then(unsubscribe => (stop = unsubscribe))
       .catch(setConnectionError)
     return () => stop?.()
@@ -57,7 +58,13 @@ export function NoxShell() {
         <div className="runtime-presence">
           <span className={view.connected ? 'presence-dot presence-dot--live' : 'presence-dot'} />
           <span>
-            {view.connecting ? 'locating runtime' : view.connected ? 'runtime present' : 'runtime unavailable'}
+            {view.connecting
+              ? 'locating runtime'
+              : view.connected
+                ? 'runtime present'
+                : view.runtimeUnhealthy
+                  ? 'runtime unhealthy'
+                  : 'runtime unavailable'}
           </span>
         </div>
         <StateVersion hash={view.stateHash} version={view.stateVersion} />

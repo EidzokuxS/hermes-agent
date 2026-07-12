@@ -1,5 +1,7 @@
 export const FOUNDATION_MIGRATION_NAME = '001_foundation'
 export const FOUNDATION_SCHEMA_VERSION = 1
+export const RUNTIME_LOOKUP_MIGRATION_NAME = '002_runtime_lookups'
+export const RUNTIME_LOOKUP_SCHEMA_VERSION = 2
 
 export interface AuditBlobRow {
   byte_length: number

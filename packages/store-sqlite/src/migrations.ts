@@ -4,7 +4,12 @@ import { readFileSync } from 'node:fs'
 
 import { canonicalHash } from '@nox/protocol'
 
-import { FOUNDATION_MIGRATION_NAME, FOUNDATION_SCHEMA_VERSION } from './schema.js'
+import {
+  FOUNDATION_MIGRATION_NAME,
+  FOUNDATION_SCHEMA_VERSION,
+  RUNTIME_LOOKUP_MIGRATION_NAME,
+  RUNTIME_LOOKUP_SCHEMA_VERSION
+} from './schema.js'
 
 interface MigrationDatabase {
   exec(sql: string): void
@@ -15,6 +20,7 @@ interface MigrationDatabase {
 }
 
 const foundationSql = readFileSync(new URL('../migrations/001_foundation.sql', import.meta.url), 'utf8')
+const runtimeLookupSql = readFileSync(new URL('../migrations/002_runtime_lookups.sql', import.meta.url), 'utf8')
 
 export const foundationMigration = {
   checksum: canonicalHash(foundationSql),
@@ -22,6 +28,15 @@ export const foundationMigration = {
   sql: foundationSql,
   version: FOUNDATION_SCHEMA_VERSION
 } as const
+
+export const runtimeLookupMigration = {
+  checksum: canonicalHash(runtimeLookupSql),
+  name: RUNTIME_LOOKUP_MIGRATION_NAME,
+  sql: runtimeLookupSql,
+  version: RUNTIME_LOOKUP_SCHEMA_VERSION
+} as const
+
+export const migrations = [foundationMigration, runtimeLookupMigration] as const
 
 export function applyMigrations(database: MigrationDatabase, appliedAt: string): void {
   const hasMigrationTable = database
@@ -40,22 +55,38 @@ export function applyMigrations(database: MigrationDatabase, appliedAt: string):
       database.exec('ROLLBACK')
       throw error
     }
-    return
   }
 
   const rows = database
     .prepare('SELECT version, name, checksum FROM schema_migrations ORDER BY version')
     .all() as Array<{ checksum: string; name: string; version: number }>
 
-  if (rows.length !== 1) {
+  if (rows.length > migrations.length) {
     throw new Error(`Unsupported schema migration count: ${rows.length}`)
   }
-  const [applied] = rows
-  if (
-    applied?.version !== foundationMigration.version ||
-    applied.name !== foundationMigration.name ||
-    applied.checksum !== foundationMigration.checksum
-  ) {
-    throw new Error('Foundation migration identity does not match the executable schema')
+  for (const [index, applied] of rows.entries()) {
+    const expected = migrations[index]
+    if (
+      expected === undefined ||
+      applied.version !== expected.version ||
+      applied.name !== expected.name ||
+      applied.checksum !== expected.checksum
+    ) {
+      throw new Error(`Migration ${applied.version} identity does not match the executable schema`)
+    }
+  }
+
+  for (const migration of migrations.slice(rows.length)) {
+    database.exec('BEGIN IMMEDIATE')
+    try {
+      database.exec(migration.sql)
+      database
+        .prepare('INSERT INTO schema_migrations(version, name, checksum, applied_at) VALUES (?, ?, ?, ?)')
+        .run(migration.version, migration.name, migration.checksum, appliedAt)
+      database.exec('COMMIT')
+    } catch (error) {
+      database.exec('ROLLBACK')
+      throw error
+    }
   }
 }

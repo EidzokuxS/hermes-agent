@@ -7,7 +7,15 @@ export { buildCortexInput } from './input-builder.js'
 export type { BuildCortexInputOptions, BuiltCortexInput } from './input-builder.js'
 export { NoxRuntime } from './nox-runtime.js'
 export type { AppendEventInput, NoxRuntimeOptions } from './nox-runtime.js'
-export type { AuditBlobInput, AuditBlobReceipt, ClockPort, CortexPort, JournalQuery, StorePort } from './ports.js'
+export type {
+  AuditBlobInput,
+  AuditBlobReceipt,
+  ClockPort,
+  CortexPort,
+  EventReleaseState,
+  JournalQuery,
+  StorePort
+} from './ports.js'
 export { analyzeRecovery } from './recovery.js'
 export type { RecoveryAnalysis, RunningActRecovery } from './recovery.js'
 export { reduceAcceptedEffects } from './reducer.js'

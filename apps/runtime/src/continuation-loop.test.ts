@@ -20,4 +20,22 @@ describe('production Continuation loop', () => {
       vi.useRealTimers()
     }
   })
+
+  it('rate-limits repeated failure diagnostics while continuing to poll', async () => {
+    vi.useFakeTimers()
+    try {
+      const onError = vi.fn()
+      const loop = startContinuationLoop(
+        { fireDueContinuations: vi.fn(async () => Promise.reject(new Error('store unavailable'))) },
+        { failureCooldownMilliseconds: 100, intervalMilliseconds: 25, onError }
+      )
+      await vi.advanceTimersByTimeAsync(75)
+      expect(onError).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(50)
+      expect(onError).toHaveBeenCalledTimes(2)
+      await loop.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

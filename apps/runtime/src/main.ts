@@ -109,8 +109,19 @@ async function main(): Promise<void> {
   await runtime.recover()
   const host = await createProcessHost({ interfaceOwnerId, launchToken, runtime })
   const continuationLoop = startContinuationLoop(runtime, {
-    onError: error =>
-      process.stderr.write(`Continuation loop failed: ${error instanceof Error ? error.message : String(error)}\n`)
+    onError: async error => {
+      const message = error instanceof Error ? error.message : String(error)
+      process.stderr.write(`Continuation loop failed: ${message}\n`)
+      try {
+        await runtime.recordOperationalFailure('continuation-loop', message)
+      } catch (persistenceError) {
+        process.stderr.write(
+          `Continuation failure could not be journaled: ${
+            persistenceError instanceof Error ? persistenceError.message : String(persistenceError)
+          }\n`
+        )
+      }
+    }
   })
   process.stdout.write(`${JSON.stringify({ port: host.port, protocolVersion: 1 })}\n`)
 

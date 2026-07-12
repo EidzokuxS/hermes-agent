@@ -14,7 +14,7 @@ import type {
 } from '@nox/protocol'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { SqliteAuditReader, SqliteStore } from '../src/index.js'
+import { foundationMigration, SqliteAuditReader, SqliteStore } from '../src/index.js'
 import type { FaultStage } from '../src/index.js'
 
 const roots: string[] = []
@@ -183,6 +183,25 @@ describe('SQLite foundation', () => {
     store.close()
   })
 
+  it('upgrades an existing foundation database with focused runtime lookup indexes', () => {
+    const path = createPath()
+    const legacy = new DatabaseSync(path)
+    legacy.exec(foundationMigration.sql)
+    legacy
+      .prepare('INSERT INTO schema_migrations(version, name, checksum, applied_at) VALUES (?, ?, ?, ?)')
+      .run(foundationMigration.version, foundationMigration.name, foundationMigration.checksum, at)
+    legacy.close()
+
+    const store = openStore(path, { now: () => at })
+    store.close()
+    const database = new DatabaseSync(path)
+    const index = database
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'journal_records_act_trigger_event'")
+      .get() as { name: string } | undefined
+    expect(index?.name).toBe('journal_records_act_trigger_event')
+    database.close()
+  })
+
   it('reopens with the same canonical State hash', async () => {
     const path = createPath()
     const first = openStore(path, { now: () => at })
@@ -206,6 +225,7 @@ describe('SQLite foundation', () => {
     const first = await store.recordExternalEvent(event)
     const retry = await store.recordExternalEvent(event)
     expect(retry).toEqual(first)
+    expect(await store.getEventReleaseState(event.eventId)).toEqual({ admitted: false, event, hasAct: false })
     expect(await store.getUnresolvedReceipts('eiji-local')).toEqual([first])
     await expect(store.recordExternalEvent(externalEvent('different content'))).rejects.toThrow(
       'clientEventId was reused'
@@ -219,6 +239,7 @@ describe('SQLite foundation', () => {
     }
     const admitted = await store.transact(admission)
     expect(await store.transact(admission)).toEqual(admitted)
+    expect(await store.getEventReleaseState(event.eventId)).toEqual({ admitted: true, event, hasAct: false })
     expect(await store.getUnresolvedReceipts('eiji-local')).toEqual([])
 
     await expect(store.transact({ ...admission, commandId: 'admit:event-001-again' })).rejects.toThrow()

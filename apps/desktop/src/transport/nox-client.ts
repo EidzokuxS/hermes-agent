@@ -6,6 +6,12 @@ export interface NoxDesktopBridge {
   cancelAct(request: { actId: string; reason: string }): Promise<unknown>
   snapshot(): Promise<ViewSnapshot>
   subscribe(listener: (event: InterfaceEvent) => void): () => void
+  subscribeHealth(listener: (event: unknown) => void): () => void
+}
+
+export interface RuntimeHealthEvent {
+  message: string
+  status: 'unhealthy'
 }
 
 declare global {
@@ -23,7 +29,8 @@ function bridge(): NoxDesktopBridge {
 
 export async function connectNox(
   onSnapshot: (view: ViewSnapshot) => void,
-  onEvent: (event: InterfaceEvent) => void
+  onEvent: (event: InterfaceEvent) => void,
+  onHealth: (event: RuntimeHealthEvent) => void
 ): Promise<() => void> {
   const queued: InterfaceEvent[] = []
   let hydrated = false
@@ -35,15 +42,31 @@ export async function connectNox(
       queued.push(parsed)
     }
   })
+  const stopHealth = bridge().subscribeHealth(event => {
+    if (
+      typeof event === 'object' &&
+      event !== null &&
+      'status' in event &&
+      event.status === 'unhealthy' &&
+      'message' in event &&
+      typeof event.message === 'string'
+    ) {
+      onHealth({ message: event.message, status: 'unhealthy' })
+    }
+  })
   try {
     onSnapshot(viewSnapshotSchema.parse(await bridge().snapshot()))
     for (const event of queued.sort((left, right) => left.journalSequence - right.journalSequence)) {
       onEvent(event)
     }
     hydrated = true
-    return stop
+    return () => {
+      stop()
+      stopHealth()
+    }
   } catch (error) {
     stop()
+    stopHealth()
     throw error
   }
 }

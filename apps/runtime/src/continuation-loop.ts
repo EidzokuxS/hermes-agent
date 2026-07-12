@@ -7,8 +7,9 @@ export interface ContinuationLoop {
 }
 
 export interface ContinuationLoopOptions {
+  failureCooldownMilliseconds?: number
   intervalMilliseconds?: number
-  onError?: (error: unknown) => void
+  onError?: (error: unknown) => Promise<void> | void
 }
 
 export function startContinuationLoop(
@@ -16,6 +17,7 @@ export function startContinuationLoop(
   options: ContinuationLoopOptions = {}
 ): ContinuationLoop {
   const intervalMilliseconds = options.intervalMilliseconds ?? 250
+  const failureCooldownMilliseconds = options.failureCooldownMilliseconds ?? 5_000
   if (!Number.isInteger(intervalMilliseconds) || intervalMilliseconds < 1) {
     throw new Error('Continuation loop interval must be a positive integer')
   }
@@ -23,6 +25,8 @@ export function startContinuationLoop(
   let stopped = false
   let timer: ReturnType<typeof setTimeout> | undefined
   let inFlight: Promise<void> = Promise.resolve()
+  let lastFailure = ''
+  let lastFailureAt = Number.NEGATIVE_INFINITY
 
   const schedule = (): void => {
     if (stopped) {
@@ -41,7 +45,13 @@ export function startContinuationLoop(
     try {
       await runtime.fireDueContinuations()
     } catch (error) {
-      options.onError?.(error)
+      const message = error instanceof Error ? error.message : String(error)
+      const observedAt = Date.now()
+      if (message !== lastFailure || observedAt - lastFailureAt >= failureCooldownMilliseconds) {
+        lastFailure = message
+        lastFailureAt = observedAt
+        await options.onError?.(error)
+      }
     } finally {
       schedule()
     }

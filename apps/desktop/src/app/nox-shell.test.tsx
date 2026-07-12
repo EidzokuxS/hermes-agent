@@ -55,6 +55,7 @@ afterEach(() => {
 
 describe('Nox shell vertical', () => {
   it('shows durable delivery before the running and silent projections', async () => {
+    let health: ((event: unknown) => void) | undefined
     let notify: ((event: InterfaceEvent) => void) | undefined
     const bridge: NoxDesktopBridge = {
       appendEvent: async request => ({
@@ -71,6 +72,10 @@ describe('Nox shell vertical', () => {
       }),
       cancelAct: async request => ({ actId: request.actId, protocolVersion: 1, requested: true }),
       snapshot: async () => emptySnapshot(),
+      subscribeHealth: listener => {
+        health = listener
+        return () => undefined
+      },
       subscribe: listener => {
         notify = listener
         return () => undefined
@@ -123,5 +128,8 @@ describe('Nox shell vertical', () => {
       protocolVersion: 1
     })
     await waitFor(() => expect(screen.getByText('Act settled without an emission.')).toBeTruthy())
+    health?.({ message: 'Continuation loop failed', status: 'unhealthy' })
+    await screen.findByText('runtime unhealthy')
+    expect(screen.getByRole('alert').textContent).toContain('Continuation loop failed')
   })
 })

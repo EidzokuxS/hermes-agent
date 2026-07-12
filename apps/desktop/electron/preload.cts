@@ -8,6 +8,11 @@ const api = {
   cancelAct: (request: { actId: string; reason: string }) =>
     ipcRenderer.invoke('nox:act-cancel', request) as Promise<unknown>,
   snapshot: () => ipcRenderer.invoke('nox:view-snapshot') as Promise<unknown>,
+  subscribeHealth: (listener: (event: unknown) => void): (() => void) => {
+    const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown): void => listener(payload)
+    ipcRenderer.on('nox:runtime-health', wrapped)
+    return () => ipcRenderer.removeListener('nox:runtime-health', wrapped)
+  },
   subscribe: (listener: (event: unknown) => void): (() => void) => {
     const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown): void => listener(payload)
     ipcRenderer.on('nox:interface-event', wrapped)
