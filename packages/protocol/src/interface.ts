@@ -104,6 +104,8 @@ export const interfaceEventSchema = z.discriminatedUnion('kind', [
 
 export const viewSnapshotSchema = z
   .object({
+    actTerminals: z.array(actTerminalSchema).max(512),
+    acts: z.array(actStartedSchema).max(512),
     currentAct: actStartedSchema.optional(),
     emissions: z.array(interfaceEmissionSchema).max(512),
     events: z.array(eventSchema).max(512),

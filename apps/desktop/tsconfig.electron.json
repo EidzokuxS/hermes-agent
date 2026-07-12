@@ -5,6 +5,6 @@
     "rootDir": "electron",
     "tsBuildInfoFile": "dist/electron.tsbuildinfo"
   },
-  "include": ["electron/**/*.ts"],
+  "include": ["electron/**/*.ts", "electron/**/*.cts"],
   "references": [{ "path": "../../packages/protocol" }, { "path": "../../packages/interface-rpc" }]
 }

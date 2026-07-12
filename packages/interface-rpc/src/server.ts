@@ -124,14 +124,20 @@ async function buildView(runtime: RpcRuntimePort, interfaceOwnerId: string): Pro
     runtime.unresolvedReceipts(interfaceOwnerId)
   ])
   const running = new Map<string, Extract<InterfaceEvent, { kind: 'act.started' }>['act']>()
+  const acts: Extract<InterfaceEvent, { kind: 'act.started' }>['act'][] = []
+  const actTerminals: Extract<InterfaceEvent, { kind: 'act.terminal' }>['act'][] = []
   for (const record of records) {
     if (record.entry.kind === 'act.started') {
       running.set(record.entry.act.actId, record.entry.act)
+      acts.push(record.entry.act)
     } else if (record.entry.kind === 'act.terminal') {
       running.delete(record.entry.terminal.actId)
+      actTerminals.push(record.entry.terminal)
     }
   }
   return viewSnapshotSchema.parse({
+    actTerminals: actTerminals.slice(-512),
+    acts: acts.slice(-512),
     ...([...running.values()][0] === undefined ? {} : { currentAct: [...running.values()][0] }),
     emissions: records
       .flatMap(record => {

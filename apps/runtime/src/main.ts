@@ -10,18 +10,22 @@ import { SqliteStore } from '@nox/store-sqlite'
 
 import { createProcessHost } from './create-process-host.js'
 
-function argument(name: string): string {
+function argument(name: string, environmentName?: string): string {
   const index = process.argv.indexOf(`--${name}`)
   const value = index < 0 ? undefined : process.argv[index + 1]
-  if (value === undefined || value.startsWith('--')) {
+  if (value !== undefined && !value.startsWith('--')) {
+    return value
+  }
+  const environmentValue = environmentName === undefined ? undefined : process.env[environmentName]
+  if (environmentValue === undefined || environmentValue.length === 0) {
     throw new Error(`Missing --${name}`)
   }
-  return value
+  return environmentValue
 }
 
 async function main(): Promise<void> {
   const dataDirectory = argument('data-dir')
-  const launchToken = argument('launch-token')
+  const launchToken = argument('launch-token', 'NOX_LAUNCH_TOKEN')
   const interfaceOwnerId = argument('interface-owner')
   const provider = argument('provider')
   const modelId = argument('model')
