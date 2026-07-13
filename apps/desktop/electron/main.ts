@@ -32,7 +32,7 @@ import nodePty from 'node-pty'
 
 import { dashboardFallbackArgs, sourceDeclaresServe } from './backend-command'
 import { buildDesktopBackendEnv } from './backend-env'
-import { canImportHermesCli, verifyHermesCli } from './backend-probes'
+import { canImportHermesCli, canImportNoxRuntime, verifyHermesCli } from './backend-probes'
 import { probeBackendReadiness, waitForDashboardPortAnnouncement } from './backend-ready'
 import { detectRemoteDisplay, isWindowsBinaryPathInWsl, isWslEnvironment } from './bootstrap-platform'
 import { runBootstrap } from './bootstrap-runner'
@@ -96,7 +96,7 @@ import {
 import { createLinkTitleWindow, guardLinkTitleSession, readLinkTitleWindowTitle } from './link-title-window'
 import { serializeJsonBody, setJsonRequestHeaders } from './oauth-net-request'
 import { PRODUCT_APP_ID, PRODUCT_NAME, PRODUCT_PROTOCOL } from './product'
-import { resolveProductHome } from './product-data'
+import { resolveProductHome, shouldUseUnmanagedRuntime } from './product-data'
 import {
   buildSessionWindowUrl,
   chatWindowWebPreferences,
@@ -3057,7 +3057,7 @@ function isActiveRuntimeUsable() {
   return (
     isHermesSourceRoot(ACTIVE_HERMES_ROOT) &&
     fileExists(venvPython) &&
-    canImportHermesCli(venvPython, {
+    canImportNoxRuntime(venvPython, {
       env: {
         PYTHONPATH: [ACTIVE_HERMES_ROOT, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter)
       }
@@ -3355,12 +3355,16 @@ function resolveHermesBackend(backendArgs) {
     return createActiveBackend(backendArgs)
   }
 
-  // 4. Existing `hermes` on PATH -- installed via install.ps1 / install.sh from
-  //    a previous tool-only setup, or pip-installed system-wide. Use it but
-  //    do NOT write a bootstrap marker; the user did this themselves and we
-  //    don't want to take ownership of an install we didn't perform.
-  //    HERMES_DESKTOP_IGNORE_EXISTING=1 forces the bootstrap path for testing.
-  if (process.env.HERMES_DESKTOP_IGNORE_EXISTING !== '1') {
+  // 4. Existing `hermes` on PATH -- development convenience only. Packaged Nox
+  //    owns a side-by-side runtime and must never silently adopt a Hermes
+  //    installation from PATH. An explicit source override remains available
+  //    through rung 1 for packaged development and diagnostics.
+  const useUnmanagedRuntime = shouldUseUnmanagedRuntime({
+    ignoreExisting: process.env.HERMES_DESKTOP_IGNORE_EXISTING,
+    isPackaged: IS_PACKAGED
+  })
+
+  if (useUnmanagedRuntime) {
     let hermesCommand = null
     const hermesOverride = process.env.HERMES_DESKTOP_HERMES
 
@@ -3424,7 +3428,7 @@ function resolveHermesBackend(backendArgs) {
   // 5. Last-ditch: pip-installed hermes_cli module via system Python.
   //    Same rationale as #4 -- the user installed this; we use it but don't
   //    take ownership.
-  const python = findSystemPython()
+  const python = useUnmanagedRuntime ? findSystemPython() : null
 
   if (python) {
     // Same smoke-test rationale as step 4: a system Python in the

@@ -257,3 +257,12 @@ Tasks 0–5 зафиксированы checkpoint-коммитом `8515ee78cc`,
 - [x] Проверить реальный wheel до manifest revision: 924 records, 16 locale entries, zero `nox`/`identity`; доказать, что будущая дельта должна поставлять и Python package, и единственный каноничный `identity/NOX.md` через `data-files` + sdist manifest с isolated artifact tests.
 - [x] Подключить production hooks после принятия Task 2 и завершения Task 3.
 - [x] Проверить на fake agent, что SQLite и JSON sinks отключены непосредственно перед `run_conversation`.
+
+## Foundation continuation: packaged runtime ownership
+
+- [x] Воспроизвести живой разрыв: packaged `Nox.exe` выбрал unmanaged Hermes из `%LOCALAPPDATA%\hermes` и создал сессию без Nox identity metadata.
+- [x] Запретить packaged resolver выбирать `hermes` из `PATH` или system Python; сохранить явный source override и dev-only fallback.
+- [x] Сделать принятую `nox.identity` частью runtime readiness, а не только source/wheel тестов.
+- [ ] Установить или обновить Nox-owned runtime до достижимой ревизии текущей сборки.
+- [ ] Запустить настоящий package с чистым product home без source override и подтвердить backend provenance, новый Nox session и resume.
+- [ ] Пересобрать superseding evidence bundle; прежний release bundle считать историческим, а не доказательством текущего packaged runtime.

@@ -17,6 +17,8 @@
 //      broken mid-update (e.g. missing python-dotenv) was re-selected forever:
 //      Retry / "Repair install" resolved the same dead interpreter instead of
 //      falling through to the bootstrap installer.
+//   4. Packaged Nox reused an unmanaged Hermes CLI from PATH when its own
+//      side-by-side runtime was absent, bypassing the accepted Nox identity.
 
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -81,5 +83,33 @@ test('unwrapWindowsVenvHermesCommand smoke-tests the venv python before trusting
     body,
     /return null\s*\n\s*\}\s*\n\s*return \{/,
     'a failed probe must fall through (return null) so the resolver reaches the bootstrap rung'
+  )
+})
+
+test('packaged Nox requires its product-owned runtime and accepted identity', () => {
+  const source = readMain()
+  const usableStart = source.indexOf('function isActiveRuntimeUsable(')
+  const usableEnd = source.indexOf('\nfunction ', usableStart + 1)
+  const usableBody = source.slice(usableStart, usableEnd === -1 ? undefined : usableEnd)
+
+  assert.match(
+    usableBody,
+    /canImportNoxRuntime\(venvPython/,
+    'the product-owned runtime probe must validate nox.identity, not only hermes_cli'
+  )
+
+  const resolverStart = source.indexOf('function resolveHermesBackend(')
+  const resolverEnd = source.indexOf('\nasync function ', resolverStart + 1)
+  const resolverBody = source.slice(resolverStart, resolverEnd === -1 ? undefined : resolverEnd)
+
+  assert.match(
+    resolverBody,
+    /shouldUseUnmanagedRuntime\(\{[\s\S]*?isPackaged: IS_PACKAGED[\s\S]*?\}\)/,
+    'the resolver must apply the packaged product boundary before considering PATH or system Python'
+  )
+  assert.match(
+    resolverBody,
+    /const python = useUnmanagedRuntime \? findSystemPython\(\) : null/,
+    'system Python must be unreachable when packaged Nox owns the runtime'
   )
 })

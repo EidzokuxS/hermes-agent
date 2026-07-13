@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import path from 'node:path'
 import test from 'node:test'
 
-import { legacyHermesHomeCandidates, resolveProductHome } from './product-data'
+import { legacyHermesHomeCandidates, resolveProductHome, shouldUseUnmanagedRuntime } from './product-data'
 
 test('new Windows installs use a side-by-side Nox data root', () => {
   assert.equal(
@@ -65,4 +65,14 @@ test('legacy Hermes roots are discoverable without becoming defaults', () => {
     }),
     ['C:\\Users\\test\\AppData\\Local\\hermes', 'C:\\Users\\test\\.hermes']
   )
+})
+
+test('packaged Nox never adopts an unmanaged Hermes runtime', () => {
+  assert.equal(shouldUseUnmanagedRuntime({ isPackaged: true }), false)
+  assert.equal(shouldUseUnmanagedRuntime({ ignoreExisting: '0', isPackaged: true }), false)
+})
+
+test('development may reuse an unmanaged runtime unless explicitly disabled', () => {
+  assert.equal(shouldUseUnmanagedRuntime({ isPackaged: false }), true)
+  assert.equal(shouldUseUnmanagedRuntime({ ignoreExisting: '1', isPackaged: false }), false)
 })

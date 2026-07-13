@@ -10,12 +10,12 @@ import shutil
 import subprocess
 import sys
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 REQUIRED_FILES = (
     "commands.log",
     "versions.json",
@@ -32,6 +32,7 @@ REQUIRED_FILES = (
     "desktop/resumed-after-restart.png",
     "desktop/visual-qa.json",
     "runtime/gateway-trace.json",
+    "runtime/backend-provenance.json",
     "runtime/streaming-trace.json",
     "runtime/interrupt-trace.json",
     "runtime/restart-report.json",
@@ -324,6 +325,26 @@ def verify_bundle(bundle: Path) -> dict[str, Any]:
     redaction = _read_json(bundle / "reviews" / "redaction.json")
     if redaction.get("status") != "pass":
         raise EvidenceError("redaction report is not passing")
+
+    provenance = _read_json(bundle / "runtime" / "backend-provenance.json")
+    runtimes = provenance.get("runtimes")
+    if not isinstance(runtimes, list) or not runtimes:
+        raise EvidenceError("backend provenance has no runtime observations")
+    for runtime in runtimes:
+        if runtime.get("status") != "pass" or runtime.get("source_override") is not False:
+            raise EvidenceError("backend provenance used an unaccepted runtime path")
+        executable = PureWindowsPath(str(runtime.get("executable_path", "")))
+        expected_root = PureWindowsPath(str(runtime.get("expected_root", "")))
+        if not executable.is_relative_to(expected_root):
+            raise EvidenceError("backend executable is outside the Nox-owned runtime")
+
+    identity = provenance.get("identity")
+    identity_manifest = _read_json(bundle / "identity" / "identity-revision.json")
+    if not isinstance(identity, dict) or identity.get("status") != "pass" or identity.get("prefix_matches") is not True:
+        raise EvidenceError("live session identity binding is not passing")
+    if identity.get("identity_revision") != identity_manifest.get("identity_sha256"):
+        raise EvidenceError("live session identity revision differs from the accepted bundle identity")
+
     return {
         "decision": manifest.get("decision"),
         "file_count": len(declared),

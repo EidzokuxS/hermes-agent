@@ -11,7 +11,13 @@ import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
 
-import { canImportHermesCli, hermesRuntimeImportProbe, verifyHermesCli } from './backend-probes'
+import {
+  canImportHermesCli,
+  canImportNoxRuntime,
+  hermesRuntimeImportProbe,
+  noxRuntimeImportProbe,
+  verifyHermesCli
+} from './backend-probes'
 
 // Resolve the host's own Node binary -- guaranteed to be on disk and
 // runnable. We use it as both a stand-in for "a python that doesn't
@@ -48,6 +54,18 @@ test('hermes runtime import probe checks config dependencies', () => {
   // passed the old probe and produced an unrecoverable boot loop.
   assert.match(probe, /\bimport dotenv\b/)
   assert.match(probe, /\bimport hermes_cli\.config\b/)
+})
+
+test('Nox runtime import probe validates the canonical identity', () => {
+  const probe = noxRuntimeImportProbe()
+
+  assert.match(probe, /\bimport hermes_cli\.config\b/)
+  assert.match(probe, /\bfrom nox\.identity import load_nox_identity\b/)
+  assert.match(probe, /\bload_nox_identity\(\)/)
+})
+
+test('canImportNoxRuntime rejects an interpreter without Nox', () => {
+  assert.equal(canImportNoxRuntime(NODE_BIN), false)
 })
 
 test('verifyHermesCli returns false when command is falsy', () => {

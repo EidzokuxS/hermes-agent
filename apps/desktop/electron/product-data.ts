@@ -9,6 +9,11 @@ export interface ProductHomeOptions {
   userDataOverride?: string
 }
 
+export interface UnmanagedRuntimePolicyOptions {
+  ignoreExisting?: string
+  isPackaged: boolean
+}
+
 function platformPath(platform: NodeJS.Platform): typeof path.posix | typeof path.win32 {
   return platform === 'win32' ? path.win32 : path.posix
 }
@@ -59,4 +64,16 @@ export function legacyHermesHomeCandidates({
   }
 
   return [...new Set(candidates)]
+}
+
+/**
+ * A packaged Nox owns its side-by-side backend. Development runs may reuse an
+ * unmanaged Hermes installation, while the existing opt-out keeps resolver
+ * tests and explicit clean-bootstrap work deterministic.
+ */
+export function shouldUseUnmanagedRuntime({
+  ignoreExisting,
+  isPackaged
+}: UnmanagedRuntimePolicyOptions): boolean {
+  return !isPackaged && ignoreExisting !== '1'
 }

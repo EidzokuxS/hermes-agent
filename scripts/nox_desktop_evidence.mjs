@@ -271,7 +271,7 @@ function killTree(pid) {
   })
 }
 
-function launchDesktop({ executable, noxHome, repoRoot, userData, workDirectory }) {
+function launchDesktop({ executable, noxHome, sourceOverride, userData, workDirectory }) {
   const portPromise = freePort()
 
   return portPromise.then(port => {
@@ -279,17 +279,24 @@ function launchDesktop({ executable, noxHome, repoRoot, userData, workDirectory 
     fs.mkdirSync(autoCapture, { recursive: true })
     fs.mkdirSync(userData, { recursive: true })
 
+    const env = {
+      ...process.env,
+      HERMES_DESKTOP_CWD: workDirectory,
+      NOX_DESKTOP_CAPTURE_DELAY_MS: '3600000',
+      NOX_DESKTOP_CAPTURE_DIR: autoCapture,
+      NOX_DESKTOP_USER_DATA_DIR: userData,
+      NOX_HOME: noxHome
+    }
+    delete env.HERMES_DESKTOP_HERMES_ROOT
+    delete env.PYTHONPATH
+
+    if (sourceOverride) {
+      env.HERMES_DESKTOP_HERMES_ROOT = sourceOverride
+    }
+
     const child = spawn(executable, [`--remote-debugging-port=${port}`], {
-      cwd: repoRoot,
-      env: {
-        ...process.env,
-        HERMES_DESKTOP_CWD: workDirectory,
-        HERMES_DESKTOP_HERMES_ROOT: repoRoot,
-        NOX_DESKTOP_CAPTURE_DELAY_MS: '3600000',
-        NOX_DESKTOP_CAPTURE_DIR: autoCapture,
-        NOX_DESKTOP_USER_DATA_DIR: userData,
-        NOX_HOME: noxHome
-      },
+      cwd: workDirectory,
+      env,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true
     })
@@ -534,7 +541,7 @@ async function interruptActiveTurn(client, text) {
 function processRows() {
   const script = [
     "Get-CimInstance Win32_Process |",
-    "Select-Object ProcessId,ParentProcessId,CommandLine,Name |",
+    "Select-Object ProcessId,ParentProcessId,CommandLine,ExecutablePath,Name |",
     "ConvertTo-Json -Compress"
   ].join(' ')
   const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
@@ -570,6 +577,78 @@ function findBackendProcess(rootPid) {
     const command = String(row.CommandLine || '').toLowerCase()
     return descendants.has(Number(row.ProcessId)) && command.includes('hermes_cli.main') && command.includes('serve')
   }) || null
+}
+
+function pathIsInside(candidate, root) {
+  const relative = path.relative(path.resolve(root), path.resolve(candidate))
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative))
+}
+
+function assertBackendProvenance(context, rootPid, phase) {
+  const backend = findBackendProcess(rootPid)
+
+  if (!backend) {
+    throw new Error(`Packaged Nox backend process was not found during ${phase}`)
+  }
+
+  const executablePath = path.resolve(String(backend.ExecutablePath || ''))
+  const expectedRoot = context.sourceOverride
+    ? path.resolve(context.sourceOverride)
+    : path.join(path.resolve(context.noxHome), 'hermes-agent')
+
+  if (!executablePath || !pathIsInside(executablePath, expectedRoot)) {
+    throw new Error(
+      `Packaged Nox selected backend outside its accepted root during ${phase}: ` +
+        `${executablePath || '<missing>'} is not below ${expectedRoot}`
+    )
+  }
+
+  return {
+    executable_path: executablePath,
+    expected_root: expectedRoot,
+    parent_pid: Number(backend.ParentProcessId),
+    phase,
+    pid: Number(backend.ProcessId),
+    source_override: Boolean(context.sourceOverride),
+    status: 'pass'
+  }
+}
+
+function readIdentityBinding(context, pythonPath) {
+  const stateDb = path.join(context.noxHome, 'state.db')
+
+  if (!fs.existsSync(stateDb)) {
+    throw new Error(`Nox state database is missing after the live journey: ${stateDb}`)
+  }
+
+  const code = [
+    'import hashlib, json, sqlite3, sys',
+    'connection = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)',
+    'row = connection.execute("SELECT system_prompt, nox_identity_revision, nox_identity_chars, nox_identity_prompt_sha256 FROM sessions ORDER BY started_at DESC LIMIT 1").fetchone()',
+    'connection.close()',
+    'assert row is not None, "no live Nox session was persisted"',
+    'prompt, revision, chars, prompt_hash = row',
+    'assert revision and chars and prompt_hash, "latest session has no Nox identity metadata"',
+    'prefix_hash = hashlib.sha256(prompt[:chars].encode("utf-8")).hexdigest()',
+    'print(json.dumps({"identity_chars": chars, "identity_revision": revision, "prefix_sha256": prefix_hash, "prefix_matches": prefix_hash == prompt_hash, "status": "pass" if prefix_hash == prompt_hash else "fail"}))'
+  ].join('; ')
+  const result = spawnSync(pythonPath, ['-c', code, stateDb], {
+    cwd: context.workDirectory,
+    encoding: 'utf8',
+    stdio: 'pipe',
+    windowsHide: true
+  })
+
+  if (result.status !== 0) {
+    throw new Error(`Could not verify the live Nox identity binding: ${result.stderr.trim()}`)
+  }
+
+  const binding = JSON.parse(result.stdout)
+  if (binding.status !== 'pass') {
+    throw new Error(`Live Nox identity prefix does not match its persisted hash: ${result.stdout.trim()}`)
+  }
+
+  return binding
 }
 
 function killProcess(pid) {
@@ -687,46 +766,18 @@ async function runProbe(context) {
       'composer',
       180_000
     )
+    await waitFor(
+      client,
+      `document.body.innerText.includes('Gateway\\nready') || document.body.innerText.includes('GPT-5.6-sol')`,
+      'gateway and model readiness',
+      180_000
+    )
+    const provenance = assertBackendProvenance(context, launched.child.pid, 'probe')
 
     if (context.prompt) {
-      const prompt = JSON.stringify(context.prompt)
-      const submission = await client.evaluate(`(() => {
-        const editor = document.querySelector('[data-slot="composer-rich-input"]')
-        if (!editor) return { ok: false, reason: 'missing-editor' }
-        editor.focus()
-        editor.textContent = ${prompt}
-        editor.dispatchEvent(new InputEvent('input', { bubbles: true, data: ${prompt}, inputType: 'insertText' }))
-        return { ok: true, route: 'input' }
-      })()`)
-      await delay(500)
-      const submitted = await client.evaluate(`(() => {
-        const editor = document.querySelector('[data-slot="composer-rich-input"]')
-        const form = editor?.closest('form')
-        const button = form?.querySelector('button[type="submit"]') ||
-          document.querySelector('button[aria-label="Send"]') ||
-          document.querySelector('button[aria-label="Send message"]')
-        if (button && !button.disabled) {
-          button.click()
-          return { ok: true, route: 'button' }
-        }
-        return { ok: false, reason: 'missing-send-button' }
-      })()`)
-      fs.writeFileSync(
+      writeJson(
         path.join(context.workDirectory, 'submission.json'),
-        `${JSON.stringify({ input: submission, submit: submitted }, null, 2)}\n`
-      )
-      await waitFor(
-        client,
-        `Boolean(document.querySelector('[data-role="user"]'))`,
-        'submitted user message',
-        240_000
-      )
-      await waitFor(
-        client,
-        `Boolean([...document.querySelectorAll('[data-role="assistant"]')]
-          .find(node => node.getAttribute('data-streaming') !== 'true' && node.innerText.trim().length > 0))`,
-        'completed assistant response',
-        300_000
+        await submitText(client, context.prompt, 'probe turn')
       )
     } else {
       await waitFor(
@@ -739,6 +790,10 @@ async function runProbe(context) {
     }
     const snapshot = await bodySnapshot(client)
     fs.writeFileSync(path.join(context.workDirectory, 'renderer-probe.json'), `${JSON.stringify(snapshot, null, 2)}\n`)
+    writeJson(path.join(context.workDirectory, 'backend-provenance.json'), {
+      identity: context.prompt ? readIdentityBinding(context, provenance.executable_path) : null,
+      runtime: provenance
+    })
     await capture(client, path.join(context.workDirectory, 'renderer-probe.png'))
     console.log(`renderer probe written to ${context.workDirectory}`)
   } catch (error) {
@@ -772,6 +827,7 @@ async function runJourney(context) {
   const wsTrace = []
   const turns = []
   const journey = {
+    backend_provenance: [],
     backend_restart: null,
     desktop_restart: null,
     started_at: new Date().toISOString(),
@@ -800,6 +856,7 @@ async function runJourney(context) {
       'gateway and model readiness',
       180_000
     )
+    journey.backend_provenance.push(assertBackendProvenance(context, launched.child.pid, 'initial'))
     await captureAt(client, path.join(desktopDir, 'empty-1440x900.png'), 1440, 900)
 
     turns.push(await submitText(client, 'Привет. Ответь одним предложением: кто ты?', 'identity turn'))
@@ -929,6 +986,7 @@ async function runJourney(context) {
       'resumed gateway',
       180_000
     )
+    journey.backend_provenance.push(assertBackendProvenance(context, launched.child.pid, 'desktop-restart'))
     journey.desktop_restart = {
       duration_ms: Date.now() - desktopRestartedAt,
       persisted_user_turns: (await messageCounts(client)).users,
@@ -938,6 +996,10 @@ async function runJourney(context) {
 
     const finalSnapshot = await bodySnapshot(client)
     writeJson(path.join(context.workDirectory, 'journey-renderer.json'), finalSnapshot)
+    journey.identity_binding = readIdentityBinding(
+      context,
+      journey.backend_provenance[journey.backend_provenance.length - 1].executable_path
+    )
     journey.completed_at = new Date().toISOString()
     journey.status = 'pass'
   } catch (error) {
@@ -968,6 +1030,10 @@ async function runJourney(context) {
       turns
     })
     writeJson(path.join(runtimeDir, 'restart-report.json'), journey)
+    writeJson(path.join(runtimeDir, 'backend-provenance.json'), {
+      identity: journey.identity_binding || null,
+      runtimes: journey.backend_provenance
+    })
 
     const journal = path.join(context.noxHome, 'nox', 'journal.sqlite3')
     if (fs.existsSync(journal)) {
@@ -987,12 +1053,23 @@ async function main() {
   const repoRoot = requiredPath(args.repo, 'repo')
   const packageDirectory = requiredPath(args.package, 'package')
   const noxHome = requiredPath(args.home, 'home')
+  const sourceOverride = args['source-override']
+    ? requiredPath(args['source-override'], 'source-override')
+    : null
   const workDirectory = path.resolve(args.work || path.join(repoRoot, 'artifacts', 'evidence-work', 'desktop'))
   const executable = requiredPath(path.join(packageDirectory, 'Nox.exe'), 'package/Nox.exe', 'file')
   const userData = path.join(workDirectory, 'user-data')
   fs.mkdirSync(workDirectory, { recursive: true })
 
-  const context = { executable, noxHome, prompt: args.prompt || null, repoRoot, userData, workDirectory }
+  const context = {
+    executable,
+    noxHome,
+    prompt: args.prompt || null,
+    repoRoot,
+    sourceOverride,
+    userData,
+    workDirectory
+  }
   const mode = args.mode || 'probe'
 
   if (mode === 'probe') {

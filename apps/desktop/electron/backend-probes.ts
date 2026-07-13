@@ -48,6 +48,36 @@ function hermesRuntimeImportProbe() {
 }
 
 /**
+ * Return the Python snippet used to verify a product-owned Nox runtime.
+ * Importing Hermes is necessary but not sufficient: the accepted identity
+ * loader must also be present and able to validate the canonical document.
+ *
+ * @returns {string}
+ */
+function noxRuntimeImportProbe() {
+  return `${hermesRuntimeImportProbe()}; from nox.identity import load_nox_identity; load_nox_identity()`
+}
+
+function canRunPythonProbe(pythonPath: string, probe: string, opts: { env?: Record<string, string> } = {}) {
+  if (!pythonPath) {
+    return false
+  }
+
+  try {
+    execFileSync(pythonPath, ['-c', probe], {
+      env: { ...process.env, ...(opts.env || {}) },
+      stdio: 'ignore',
+      timeout: PROBE_TIMEOUT_MS,
+      windowsHide: true
+    })
+
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Return true iff the Nox runtime import probe exits 0.
  *
  * Used to gate the "fallback to system Python with hermes_cli installed"
@@ -66,22 +96,12 @@ function hermesRuntimeImportProbe() {
  * @returns {boolean}
  */
 function canImportHermesCli(pythonPath: string, opts: { env?: Record<string, string> } = {}) {
-  if (!pythonPath) {
-    return false
-  }
+  return canRunPythonProbe(pythonPath, hermesRuntimeImportProbe(), opts)
+}
 
-  try {
-    execFileSync(pythonPath, ['-c', hermesRuntimeImportProbe()], {
-      env: { ...process.env, ...(opts.env || {}) },
-      stdio: 'ignore',
-      timeout: PROBE_TIMEOUT_MS,
-      windowsHide: true
-    })
-
-    return true
-  } catch {
-    return false
-  }
+/** Return true iff the interpreter can load the accepted Nox runtime. */
+function canImportNoxRuntime(pythonPath: string, opts: { env?: Record<string, string> } = {}) {
+  return canRunPythonProbe(pythonPath, noxRuntimeImportProbe(), opts)
 }
 
 /**
@@ -123,4 +143,11 @@ function verifyHermesCli(hermesCommand: string, opts?: { shell?: boolean }) {
   }
 }
 
-export { canImportHermesCli, hermesRuntimeImportProbe, PROBE_TIMEOUT_MS, verifyHermesCli }
+export {
+  canImportHermesCli,
+  canImportNoxRuntime,
+  hermesRuntimeImportProbe,
+  noxRuntimeImportProbe,
+  PROBE_TIMEOUT_MS,
+  verifyHermesCli
+}
