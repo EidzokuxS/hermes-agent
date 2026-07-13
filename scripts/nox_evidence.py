@@ -220,7 +220,7 @@ def init_bundle(bundle: Path, package_dir: Path | None) -> None:
         / "hermes-foundation"
         / "task5-product"
         / "screenshots"
-        / "nox-1440x900.png"
+        / "1440x900.png"
     )
     if static_screenshot.is_file():
         _copy_required(static_screenshot, bundle / "desktop" / "empty-1440x900.png")
