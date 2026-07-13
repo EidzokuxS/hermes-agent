@@ -711,6 +711,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     model TEXT,
     model_config TEXT,
     system_prompt TEXT,
+    nox_identity_revision TEXT,
+    nox_identity_chars INTEGER,
+    nox_identity_prompt_sha256 TEXT,
     parent_session_id TEXT,
     started_at REAL NOT NULL,
     ended_at REAL,
@@ -1670,6 +1673,9 @@ class SessionDB:
         model: str = None,
         model_config: Dict[str, Any] = None,
         system_prompt: str = None,
+        nox_identity_revision: str = None,
+        nox_identity_chars: int = None,
+        nox_identity_prompt_sha256: str = None,
         user_id: str = None,
         session_key: str = None,
         chat_id: str = None,
@@ -1700,13 +1706,27 @@ class SessionDB:
             conn.execute(
                 """INSERT INTO sessions (
                    id, source, user_id, session_key, chat_id, chat_type, thread_id,
-                   model, model_config, system_prompt, parent_session_id, cwd, started_at
+                   model, model_config, system_prompt,
+                   nox_identity_revision, nox_identity_chars,
+                   nox_identity_prompt_sha256, parent_session_id, cwd, started_at
                 )
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(id) DO UPDATE SET
                        model = COALESCE(sessions.model, excluded.model),
                        model_config = COALESCE(sessions.model_config, excluded.model_config),
                        system_prompt = COALESCE(sessions.system_prompt, excluded.system_prompt),
+                       nox_identity_revision = COALESCE(
+                           sessions.nox_identity_revision,
+                           excluded.nox_identity_revision
+                       ),
+                       nox_identity_chars = COALESCE(
+                           sessions.nox_identity_chars,
+                           excluded.nox_identity_chars
+                       ),
+                       nox_identity_prompt_sha256 = COALESCE(
+                           sessions.nox_identity_prompt_sha256,
+                           excluded.nox_identity_prompt_sha256
+                       ),
                        session_key = COALESCE(sessions.session_key, excluded.session_key),
                        chat_id = COALESCE(sessions.chat_id, excluded.chat_id),
                        chat_type = COALESCE(sessions.chat_type, excluded.chat_type),
@@ -1724,6 +1744,9 @@ class SessionDB:
                     model,
                     json.dumps(model_config) if model_config else None,
                     system_prompt,
+                    nox_identity_revision,
+                    nox_identity_chars,
+                    nox_identity_prompt_sha256,
                     parent_session_id,
                     cwd,
                     time.time(),
@@ -2419,12 +2442,33 @@ class SessionDB:
             )
         self._execute_write(_do)
 
-    def update_system_prompt(self, session_id: str, system_prompt: str) -> None:
-        """Store the full assembled system prompt snapshot."""
+    def update_system_prompt(
+        self,
+        session_id: str,
+        system_prompt: str,
+        *,
+        nox_identity_revision: Optional[str] = None,
+        nox_identity_chars: Optional[int] = None,
+        nox_identity_prompt_sha256: Optional[str] = None,
+    ) -> None:
+        """Store the prompt and its optional session-bound Nox identity."""
         def _do(conn):
             conn.execute(
-                "UPDATE sessions SET system_prompt = ? WHERE id = ?",
-                (system_prompt, session_id),
+                """UPDATE sessions
+                   SET system_prompt = ?,
+                       nox_identity_revision = COALESCE(?, nox_identity_revision),
+                       nox_identity_chars = COALESCE(?, nox_identity_chars),
+                       nox_identity_prompt_sha256 = COALESCE(
+                           ?, nox_identity_prompt_sha256
+                       )
+                   WHERE id = ?""",
+                (
+                    system_prompt,
+                    nox_identity_revision,
+                    nox_identity_chars,
+                    nox_identity_prompt_sha256,
+                    session_id,
+                ),
             )
         self._execute_write(_do)
 
@@ -2456,17 +2500,18 @@ class SessionDB:
         (only filling in NULL), this unconditionally sets the billing fields so
         that the dashboard reflects the user's latest /model switch.
 
-        Also nulls ``system_prompt`` so the cached snapshot (which embeds a
-        stale ``Model:`` / ``Provider:`` header) is rebuilt — matching the
-        behavior of ``update_session_model`` (see #48173, #48248).
+        The existing prompt snapshot is retained. On the next turn,
+        ``_stored_prompt_matches_runtime`` detects stale Model/Provider lines
+        and rebuilds operational metadata while retaining the session-bound
+        Nox identity. Keeping the snapshot also makes a crash between the
+        switch and the next turn recoverable.
         """
         def _do(conn):
             conn.execute(
                 """UPDATE sessions SET
                    billing_provider = ?,
                    billing_base_url = ?,
-                   billing_mode = COALESCE(?, billing_mode),
-                   system_prompt = NULL
+                   billing_mode = COALESCE(?, billing_mode)
                    WHERE id = ?""",
                 (provider, base_url, billing_mode, session_id),
             )

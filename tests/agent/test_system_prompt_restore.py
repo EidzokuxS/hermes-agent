@@ -16,11 +16,13 @@ instead of rebuilding).  Covers:
 from __future__ import annotations
 
 import logging
+from hashlib import sha256
 from unittest.mock import MagicMock
 
 import pytest
 
 from agent.conversation_loop import _restore_or_build_system_prompt
+from nox.identity import NoxIdentitySnapshot
 
 
 def _make_agent(session_db=None, prebuilt_prompt: str = "BUILT_PROMPT"):
@@ -42,6 +44,35 @@ def _make_agent(session_db=None, prebuilt_prompt: str = "BUILT_PROMPT"):
 
 
 class TestStoredPromptReuse:
+    def test_nox_identity_snapshot_is_restored_with_the_prompt(self):
+        identity = "# Nox\n\nSession-bound identity."
+        prompt_hash = sha256(identity.encode("utf-8")).hexdigest()
+        stored = f"{identity}\n\nOperational guidance."
+        db = MagicMock()
+        db.get_session.return_value = {
+            "system_prompt": stored,
+            "nox_identity_revision": "a" * 64,
+            "nox_identity_chars": len(identity),
+            "nox_identity_prompt_sha256": prompt_hash,
+        }
+        agent = _make_agent(session_db=db)
+        agent._nox_identity_snapshot = None
+        agent._preserve_system_prompt_snapshot = False
+
+        _restore_or_build_system_prompt(
+            agent,
+            None,
+            [{"role": "user", "content": "hi"}],
+        )
+
+        assert agent._cached_system_prompt == stored
+        assert agent._nox_identity_snapshot == NoxIdentitySnapshot(
+            revision="a" * 64,
+            prompt_sha256=prompt_hash,
+            prompt_text=identity,
+        )
+        agent._build_system_prompt.assert_not_called()
+
     def test_present_row_is_reused_verbatim(self, caplog):
         """Continuing session with a stored prompt → reuse byte-for-byte."""
         stored = "Stored prompt from turn 1 — byte-identical reuse"

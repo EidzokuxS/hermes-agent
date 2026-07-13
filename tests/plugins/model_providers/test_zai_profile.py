@@ -32,6 +32,13 @@ def zai_profile():
     return profile
 
 
+def test_zai_uses_claude_code_user_agent(zai_profile):
+    """Coding Plan must see a Claude Code client profile, not OpenAI/Python."""
+    assert zai_profile.default_headers == {
+        "User-Agent": "claude-cli/2.1.207 (external, sdk-cli)"
+    }
+
+
 class TestZaiThinkingWireShape:
     """``build_api_kwargs_extras`` produces Z.AI's exact wire format."""
 

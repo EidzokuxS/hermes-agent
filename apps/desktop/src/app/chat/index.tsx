@@ -44,8 +44,6 @@ import {
   $currentProvider,
   $freshDraftReady,
   $gatewayState,
-  $introPersonality,
-  $introSeed,
   $lastVisibleMessageIsUser,
   $messages,
   $messagesEmpty,
@@ -308,8 +306,6 @@ export function ChatView({
   const gatewayState = useStore($gatewayState)
   const gatewaySwapTarget = useStore($gatewaySwapTarget)
   const gatewayOpen = gatewayState === 'open'
-  const introPersonality = useStore($introPersonality)
-  const introSeed = useStore($introSeed)
   // PERF: ChatView must not subscribe to $messages — the atom is replaced on
   // every streaming delta flush (~30×/s) and a subscription here re-renders
   // the entire chat shell (header, chat bar, thread wrapper) per token. The
@@ -369,7 +365,7 @@ export function ChatView({
       }
 
       if (!gateway) {
-        throw new Error('Hermes gateway unavailable')
+        throw new Error('Nox gateway unavailable')
       }
 
       return gateway.request<ModelOptionsResponse>('model.options', {
@@ -473,7 +469,7 @@ export function ChatView({
             clampToComposer={showChatBar}
             cwd={currentCwd}
             gateway={gateway}
-            intro={showIntro ? { personality: introPersonality, seed: introSeed } : undefined}
+            intro={showIntro ? {} : undefined}
             loading={threadLoading}
             onBranchInNewChat={onBranchInNewChat}
             onCancel={onCancel}

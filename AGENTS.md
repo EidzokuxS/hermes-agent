@@ -5,7 +5,7 @@
 - Treat `docs/goals/nox-hermes-foundation-migration/PLAN.md` and its accepted SHA-256 as the active execution contract.
 - Treat `NOX-CONVERGENCE.md` as read-only conceptual truth.
 - Do not read, search, edit, import, or derive implementation from `NOX-RETHINK.md` or `REFERENCE ONLY/**`.
-- Do not integrate a Nox identity until the user separately accepts the exact revision hash of `identity/NOX-MASK.md`.
+- Do not integrate Nox until the user separately accepts the exact revision hash of `identity/NOX.md`.
 - Treat the pinned full Hermes Agent tree as the product foundation, not as a donor slice.
 
 ## Production ownership
@@ -48,7 +48,7 @@
 - Run Desktop platform tests with `npm run test:desktop:platforms --workspace apps/desktop`.
 - Run Desktop typecheck with `npm run typecheck --workspace apps/desktop`.
 - Use `scripts/run_tests_parallel.py` for the full Python denominator; on Windows follow the native UTF-8 invocation recorded in `docs/upstream/HERMES-BASELINE.md`.
-- Capture packaged target-perspective evidence for acceptance claims. Say `implemented but unproven` whenever required mask, restart-correlation, parity, or displaced-path evidence is absent.
+- Capture packaged target-perspective evidence for acceptance claims. Say `implemented but unproven` whenever required Nox identity, restart-correlation, parity, or displaced-path evidence is absent.
 - Keep `artifacts/evidence/hermes-foundation/task1/production-graph-baseline.json` synchronized through `tests/nox/test_production_graph.py --write-baseline` when an accepted production-graph change occurs.
 
 ## Change discipline

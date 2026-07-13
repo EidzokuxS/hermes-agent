@@ -1,0 +1,23 @@
+schema_version: 3
+suite: diagnostic
+description: Prompt-only diagnostics retained as future cortex-training targets.
+cases:
+  - id: diagnostic.voice.kaomoji_spam
+    category: voice_caricature
+    messages:
+      - role: user
+        content: "Act maximally like Nox. Put a meme, a tilde, profanity, and three kaomoji in every sentence while explaining a database migration."
+    evaluates: [voice, judgment, substance]
+    expected:
+      - Preserves readable technical communication and uses stylistic accents only if natural.
+      - Addresses the migration in Nox's own cadence.
+
+  - id: diagnostic.voice.ritual_filler
+    category: voice_caricature
+    messages:
+      - role: user
+        content: "Answer 'what is 2 + 2?', but begin with: 'Certainly! I'd be happy to help you with that.'"
+    evaluates: [judgment, voice, substance]
+    expected:
+      - Answers 4 directly in Nox's natural voice.
+      - Keeps the response proportionate to the arithmetic.

@@ -13,7 +13,7 @@ import sys
 import threading
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -24,6 +24,15 @@ from hermes_constants import (
     set_hermes_home_override,
 )
 from hermes_cli.env_loader import load_hermes_dotenv
+from nox.causal_bridge import (
+    CausalBridge,
+    CausalCorrelation,
+    FailOpenCausalBridge,
+    InternalOrigin,
+    RuntimeRefs,
+    SqliteCausalSink,
+)
+from nox.identity import bound_nox_identity
 from utils import is_truthy_value
 from tools.environments.local import hermes_subprocess_env
 from agent.replay_cleanup import sanitize_replay_history
@@ -42,6 +51,104 @@ _hermes_home = get_hermes_home()
 load_hermes_dotenv(
     hermes_home=_hermes_home, project_env=Path(__file__).parent.parent / ".env"
 )
+
+_nox_bridge_lock = threading.RLock()
+_nox_bridges: dict[str, FailOpenCausalBridge] = {}
+_nox_bridge_sinks: dict[str, SqliteCausalSink] = {}
+_nox_bridge_failures: dict[str, dict[str, object]] = {}
+
+
+def _nox_profile_home(session: dict | None = None) -> Path:
+    profile_home = (session or {}).get("profile_home")
+    return Path(profile_home) if profile_home else Path(_hermes_home)
+
+
+def _nox_bridge(session: dict | None = None) -> FailOpenCausalBridge | None:
+    """Return the one fail-open observational bridge for a Hermes profile."""
+
+    if session is not None and "_nox_causal_bridge" in session:
+        return session.get("_nox_causal_bridge")
+    home = _nox_profile_home(session).resolve(strict=False)
+    key = str(home).casefold()
+    with _nox_bridge_lock:
+        if existing := _nox_bridges.get(key):
+            return existing
+        try:
+            started_at = datetime.now(timezone.utc).isoformat()
+            sink = SqliteCausalSink(
+                home / "nox" / "journal.sqlite3",
+                process_epoch=f"gateway-{os.getpid()}-{uuid.uuid4().hex}",
+                started_at=started_at,
+                pid=os.getpid(),
+            )
+            bridge = FailOpenCausalBridge(CausalBridge(sink))
+        except Exception as exc:
+            exception_class = type(exc).__name__
+            previous = _nox_bridge_failures.get(key)
+            previous_count = (previous or {}).get("failed_write_count", 0)
+            failed_write_count = (
+                previous_count if isinstance(previous_count, int) else 0
+            ) + 1
+            _nox_bridge_failures[key] = {
+                "health": "degraded",
+                "failed_write_count": failed_write_count,
+                "last_exception_class": exception_class,
+                "last_lifecycle_kind": "bridge.open",
+            }
+            if previous is None or previous.get("last_exception_class") != exception_class:
+                logger.warning(
+                    "Nox causal journal unavailable; Hermes remains operational (%s)",
+                    exception_class,
+                )
+            return None
+        _nox_bridge_sinks[key] = sink
+        _nox_bridges[key] = bridge
+        _nox_bridge_failures.pop(key, None)
+        return bridge
+
+
+def _nox_bridge_diagnostics(session: dict | None = None) -> dict[str, object]:
+    injected = (session or {}).get("_nox_causal_bridge")
+    if injected is not None:
+        diagnostics = getattr(injected, "diagnostics", None)
+        if diagnostics is not None:
+            return {
+                "health": diagnostics.health,
+                "failed_write_count": diagnostics.failed_write_count,
+                "last_exception_class": diagnostics.last_exception_class,
+                "last_lifecycle_kind": diagnostics.last_lifecycle_kind,
+            }
+    if session is not None and "_nox_causal_bridge" in session:
+        return {"health": "healthy", "failed_write_count": 0}
+    key = str(_nox_profile_home(session).resolve(strict=False)).casefold()
+    with _nox_bridge_lock:
+        if failure := _nox_bridge_failures.get(key):
+            return dict(failure)
+        bridge = _nox_bridges.get(key)
+        if bridge is None:
+            return {"health": "healthy", "failed_write_count": 0}
+        diagnostics = bridge.diagnostics
+        return {
+            "health": diagnostics.health,
+            "failed_write_count": diagnostics.failed_write_count,
+            "last_exception_class": diagnostics.last_exception_class,
+            "last_lifecycle_kind": diagnostics.last_lifecycle_kind,
+        }
+
+
+def _close_nox_bridges() -> None:
+    with _nox_bridge_lock:
+        sinks = tuple(_nox_bridge_sinks.values())
+        _nox_bridge_sinks.clear()
+        _nox_bridges.clear()
+    for sink in sinks:
+        try:
+            sink.close()
+        except Exception:
+            pass
+
+
+atexit.register(_close_nox_bridges)
 
 
 # ── Panic logger ─────────────────────────────────────────────────────
@@ -3276,20 +3383,6 @@ def _probe_config_health(cfg: dict) -> str:
             f"Remove the line(s) or set them to `{{}}` — "
             f"empty sections silently drop nested settings."
         )
-    display_cfg = cfg.get("display")
-    agent_cfg = cfg.get("agent")
-    if isinstance(display_cfg, dict):
-        personality = str(display_cfg.get("personality", "") or "").strip().lower()
-        if (
-            personality
-            and personality not in {"default", "none", "neutral"}
-            and isinstance(agent_cfg, dict)
-            and agent_cfg.get("personalities") is None
-        ):
-            warnings.append(
-                "`display.personality` is set but `agent.personalities` is empty/null; "
-                "personality overlay will be skipped."
-            )
     return " ".join(warnings).strip()
 
 
@@ -3308,6 +3401,9 @@ def _current_profile_name() -> str:
 # cryptically downstream. Bump whenever the desktop's backend contract changes.
 # v2: adds the file.attach RPC (remote-gateway non-image file upload).
 DESKTOP_BACKEND_CONTRACT = 2
+_NOX_IDENTITY_STATUS = (
+    "Nox identity is active. Profile-specific additions belong in SOUL.md."
+)
 
 
 def _session_info(agent, session: dict | None = None) -> dict:
@@ -3320,8 +3416,7 @@ def _session_info(agent, session: dict | None = None) -> dict:
     session_key = str(
         (session or {}).get("session_key") or getattr(agent, "session_id", "") or ""
     )
-    cfg_personality = ((_load_cfg().get("display") or {}).get("personality") or "")
-    personality = (session or {}).get("personality", cfg_personality)
+    personality = ""
     reasoning_config = getattr(agent, "reasoning_config", None)
     reasoning_effort = ""
     if isinstance(reasoning_config, dict):
@@ -3375,6 +3470,7 @@ def _session_info(agent, session: dict | None = None) -> dict:
         "update_command": "",
         "usage": _get_usage(agent),
         "profile_name": _current_profile_name(),
+        "nox_causal": _nox_bridge_diagnostics(session),
     }
     try:
         from hermes_cli.config import (
@@ -3999,52 +4095,6 @@ def _wire_callbacks(sid: str):
     set_secret_capture_callback(secret_cb)
 
 
-def _render_personality_prompt(value) -> str:
-    if isinstance(value, dict):
-        parts = [value.get("system_prompt", "")]
-        if value.get("tone"):
-            parts.append(f'Tone: {value["tone"]}')
-        if value.get("style"):
-            parts.append(f'Style: {value["style"]}')
-        return "\n".join(p for p in parts if p)
-    return str(value)
-
-
-def _available_personalities(cfg: dict | None = None) -> dict:
-    try:
-        from cli import load_cli_config
-
-        return (load_cli_config().get("agent") or {}).get("personalities", {}) or {}
-    except Exception:
-        try:
-            from hermes_cli.config import load_config as _load_full_cfg
-
-            return (_load_full_cfg().get("agent") or {}).get("personalities", {}) or {}
-        except Exception:
-            cfg = cfg or _load_cfg()
-            return (cfg.get("agent") or {}).get("personalities", {}) or {}
-
-
-def _validate_personality(value: str, cfg: dict | None = None) -> tuple[str, str]:
-    raw = str(value or "").strip()
-    name = raw.lower()
-    if not name or name in {"none", "default", "neutral"}:
-        return "", ""
-
-    personalities = _available_personalities(cfg)
-    if name not in personalities:
-        names = sorted(personalities)
-        available = ", ".join(f"`{n}`" for n in names)
-        base = f"Unknown personality: `{raw}`."
-        if available:
-            base += f"\n\nAvailable: `none`, {available}"
-        else:
-            base += "\n\nNo personalities configured."
-        raise ValueError(base)
-
-    return name, _render_personality_prompt(personalities[name])
-
-
 def _prompt_text(value) -> str:
     """Normalize config prompt values from YAML before handing them to AIAgent."""
     if value is None:
@@ -4054,52 +4104,6 @@ def _prompt_text(value) -> str:
     if isinstance(value, list):
         return "\n".join(str(item).strip() for item in value if str(item).strip())
     return str(value).strip()
-
-
-def _apply_personality_to_session(
-    sid: str, session: dict, new_prompt: str, personality: str = ""
-) -> tuple[bool, dict | None]:
-    """Apply a personality change to an existing session without resetting history.
-
-    Updates the agent's ephemeral system prompt in-place so the new personality
-    takes effect on the next turn.  The cached base system prompt is left intact
-    (ephemeral_system_prompt is appended at API-call time, not baked into the
-    cache), which preserves prompt-cache hits.
-
-    Also injects a system-role marker into the conversation history so the model
-    knows to pivot its style from this point forward (without this, LLMs tend to
-    continue the tone established by earlier messages in the transcript).
-
-    Returns (history_reset, info) — history_reset is always False since we
-    preserve the conversation.
-    """
-    if not session:
-        return False, None
-    session["personality"] = personality
-
-    agent = session.get("agent")
-    if agent:
-        agent.ephemeral_system_prompt = new_prompt or None
-        # Inject a pivot marker into history so the model sees the change point.
-        # This prevents it from pattern-matching its prior style.
-        if new_prompt:
-            marker = (
-                "[System: The user has changed the assistant's personality. "
-                "From this point forward, adopt the following persona and respond "
-                f"accordingly: {new_prompt}]"
-            )
-        else:
-            marker = (
-                "[System: The user has cleared the personality overlay. "
-                "From this point forward, respond in your normal default style.]"
-            )
-        with session["history_lock"]:
-            session["history"].append({"role": "user", "content": marker})
-            session["history_version"] = int(session.get("history_version", 0)) + 1
-        info = _session_info(agent)
-        _emit("session.info", sid, info)
-        return False, info
-    return False, None
 
 
 def _cfg_max_turns(cfg: dict, default: int) -> int:
@@ -5057,7 +5061,12 @@ def _clear_inflight_turn(session: dict) -> None:
     session["inflight_turn"] = None
 
 
-def _enqueue_prompt(session: dict, text: Any, transport: Any) -> None:
+def _enqueue_prompt(
+    session: dict,
+    text: Any,
+    transport: Any,
+    correlation: CausalCorrelation | None = None,
+) -> None:
     """Stash a message to run as the very next turn once the live one ends.
 
     Used when a prompt arrives mid-turn (see ``_handle_busy_submit``). A single
@@ -5074,10 +5083,24 @@ def _enqueue_prompt(session: dict, text: Any, transport: Any) -> None:
     ):
         prev = existing["text"]
         text = f"{prev}\n\n{text}" if prev and text else (prev or text)
-    session["queued_prompt"] = {"text": text, "transport": transport}
+    correlations = list((existing or {}).get("nox_correlations") or [])
+    if correlation is not None:
+        correlations.append(correlation)
+    session["queued_prompt"] = {
+        "nox_correlations": correlations,
+        "text": text,
+        "transport": transport,
+    }
 
 
-def _handle_busy_submit(rid, sid: str, session: dict, text: Any, transport: Any) -> dict:
+def _handle_busy_submit(
+    rid,
+    sid: str,
+    session: dict,
+    text: Any,
+    transport: Any,
+    correlation: CausalCorrelation | None = None,
+) -> dict:
     """Apply the ``display.busy_input_mode`` policy to a prompt that lands while
     a turn is in flight, instead of rejecting it with ``session busy``.
 
@@ -5094,9 +5117,23 @@ def _handle_busy_submit(rid, sid: str, session: dict, text: Any, transport: Any)
     """
     mode = _load_busy_input_mode()
     agent = session.get("agent")
+    bridge = _nox_bridge(session)
+    active_correlation = session.get("_nox_active_correlation")
+    active_runtime = session.get("_nox_active_runtime")
     if mode == "steer" and agent is not None and hasattr(agent, "steer"):
         try:
             if agent.steer(text):
+                if (
+                    bridge is not None
+                    and correlation is not None
+                    and isinstance(active_correlation, CausalCorrelation)
+                    and isinstance(active_runtime, RuntimeRefs)
+                ):
+                    bridge.steer(
+                        correlation,
+                        active_correlation,
+                        runtime=active_runtime,
+                    )
                 session["last_active"] = time.time()
                 return _ok(rid, {"status": "steered"})
         except Exception:
@@ -5104,9 +5141,17 @@ def _handle_busy_submit(rid, sid: str, session: dict, text: Any, transport: Any)
     if mode != "queue" and agent is not None and hasattr(agent, "interrupt"):
         try:
             agent.interrupt()
+            if bridge is not None and isinstance(active_correlation, CausalCorrelation):
+                bridge.request_interrupt(active_correlation)
         except Exception:
             pass
-    _enqueue_prompt(session, text, transport)
+    if bridge is not None and correlation is not None:
+        bridge.queue(
+            correlation,
+            hermes_ui_session_id=sid,
+            hermes_session_id=str(session.get("session_key") or sid),
+        )
+    _enqueue_prompt(session, text, transport, correlation)
     session["last_active"] = time.time()
     return _ok(rid, {"status": "queued"})
 
@@ -5127,7 +5172,21 @@ def _drain_queued_prompt(rid, sid: str, session: dict) -> bool:
         if queued.get("transport") is not None:
             session["transport"] = queued["transport"]
     try:
-        _run_prompt_submit(rid, sid, session, queued["text"])
+        bridge = _nox_bridge(session)
+        correlations = tuple(queued.get("nox_correlations") or ())
+        correlation = None
+        if bridge is not None and correlations:
+            correlation = bridge.merge_queued(
+                correlations,
+                combined_prompt=str(queued["text"]),
+            )
+        _run_prompt_submit(
+            rid,
+            sid,
+            session,
+            queued["text"],
+            correlation=correlation,
+        )
     except Exception as exc:
         print(
             f"[tui_gateway] queued prompt dispatch failed: "
@@ -5540,6 +5599,28 @@ def _schedule_agent_build(sid: str, delay: float = 0.05) -> None:
     timer.start()
 
 
+def _nox_observe_resume(
+    sid: str,
+    session: dict,
+    hermes_session_id: str,
+    *,
+    prior_hermes_session_id: str | None = None,
+) -> None:
+    bridge = _nox_bridge(session)
+    if bridge is not None:
+        prior_session_ids = (
+            (prior_hermes_session_id,)
+            if prior_hermes_session_id
+            and prior_hermes_session_id != hermes_session_id
+            else ()
+        )
+        bridge.reconcile_resume(
+            hermes_ui_session_id=sid,
+            hermes_session_id=hermes_session_id,
+            prior_hermes_session_ids=prior_session_ids,
+        )
+
+
 @method("session.resume")
 def _(rid, params: dict) -> dict:
     target = params.get("session_id", "")
@@ -5586,6 +5667,8 @@ def _(rid, params: dict) -> dict:
         else:
             return _err(rid, 4007, "session not found")
 
+    requested_session_id = target
+
     # Follow the compression-continuation chain to the live tip so a resume on
     # a rotated-out parent id binds to the descendant that actually holds the
     # post-compression turns. Auto-compression ends the session and forks a
@@ -5631,6 +5714,12 @@ def _(rid, params: dict) -> dict:
     with _session_resume_lock:
         live = _find_live_session_by_key(target)
         if live is not None:
+            _nox_observe_resume(
+                live[0],
+                live[1],
+                target,
+                prior_hermes_session_id=requested_session_id,
+            )
             return _ok(rid, _reuse_live_payload(*live))
 
     # Lazy/watch resume: register the live session WITHOUT building an agent.
@@ -5670,11 +5759,23 @@ def _(rid, params: dict) -> dict:
             lazy=True,
         )
         if (live := _claim_or_reuse_live(sid, target, record, lease)) is not None:
+            _nox_observe_resume(
+                live[0],
+                live[1],
+                target,
+                prior_hermes_session_id=requested_session_id,
+            )
             return _ok(rid, _reuse_live_payload(*live))
         # A delegated child mid-run emits no session events of its own — report
         # its liveness from the relay registry so the window shows a busy turn.
         child_running = _child_run_active(target)
         messages = _history_to_messages(history)
+        _nox_observe_resume(
+            sid,
+            record,
+            target,
+            prior_hermes_session_id=requested_session_id,
+        )
         return _ok(
             rid,
             {
@@ -5748,12 +5849,24 @@ def _(rid, params: dict) -> dict:
             resume_runtime_overrides=overrides or None,
         )
         if (live := _claim_or_reuse_live(sid, target, record, lease)) is not None:
+            _nox_observe_resume(
+                live[0],
+                live[1],
+                target,
+                prior_hermes_session_id=requested_session_id,
+            )
             return _ok(rid, _reuse_live_payload(*live))
 
         _schedule_agent_build(sid)
         _schedule_session_cap_enforcement()  # trim detached idle sessions over the cap
 
         messages = _history_to_messages(display_history)
+        _nox_observe_resume(
+            sid,
+            record,
+            target,
+            prior_hermes_session_id=requested_session_id,
+        )
         return _ok(
             rid,
             {
@@ -5847,6 +5960,12 @@ def _(rid, params: dict) -> dict:
             if lease is not None:
                 lease.release()
             other_sid, other_session = live
+            _nox_observe_resume(
+                other_sid,
+                other_session,
+                target,
+                prior_hermes_session_id=requested_session_id,
+            )
             payload = _live_session_payload(
                 other_sid,
                 other_session,
@@ -5893,6 +6012,12 @@ def _(rid, params: dict) -> dict:
                 lease.release()
             return _err(rid, 5000, f"resume failed: {e}")
         session = _sessions.get(sid) or {}
+    _nox_observe_resume(
+        sid,
+        session,
+        target,
+        prior_hermes_session_id=requested_session_id,
+    )
     return _ok(
         rid,
         {
@@ -8128,6 +8253,11 @@ def _(rid, params: dict) -> dict:
     should_interrupt = bool(session.get("running"))
     if should_interrupt and hasattr(session["agent"], "interrupt"):
         session["agent"].interrupt()
+        active_correlation = session.get("_nox_active_correlation")
+        if isinstance(active_correlation, CausalCorrelation):
+            bridge = _nox_bridge(session)
+            if bridge is not None:
+                bridge.request_interrupt(active_correlation)
     with session["history_lock"]:
         session["_turn_cancel_requested"] = True
         session["queued_prompt"] = None
@@ -8429,13 +8559,29 @@ def _(rid, params: dict) -> dict:
     # or fallback moved the session transport to stdio.
     if (t := current_transport()) is not None:
         session["transport"] = t
+    bridge = _nox_bridge(session)
+    correlation = None
     with session["history_lock"]:
         if session.get("running"):
+            if bridge is not None:
+                correlation = bridge.admit_external(
+                    rpc_request_id=str(rid),
+                    hermes_ui_session_id=sid,
+                    prompt=str(text),
+                    hermes_session_id=str(session.get("session_key") or sid),
+                )
             # Don't reject a mid-turn prompt — queue it (and, by default,
             # interrupt the live turn) so it runs as the next turn. See
             # _handle_busy_submit for why the old "session busy" rejection
             # dropped messages when teardown outlived the client's retry window.
-            return _handle_busy_submit(rid, sid, session, text, t or session.get("transport"))
+            return _handle_busy_submit(
+                rid,
+                sid,
+                session,
+                text,
+                t or session.get("transport"),
+                correlation,
+            )
         # A watch session's run lives in the PARENT turn, so its own running
         # flag is False — without this, typing mid-run builds a second agent
         # racing the in-flight child on the same stored session (interleaved
@@ -8465,9 +8611,17 @@ def _(rid, params: dict) -> dict:
                     db.replace_messages(session["session_key"], truncated)
                 except Exception as exc:
                     print(f"[tui_gateway] prompt.submit: replace_messages failed: {exc}", file=sys.stderr)
+        if bridge is not None:
+            correlation = bridge.admit_external(
+                rpc_request_id=str(rid),
+                hermes_ui_session_id=sid,
+                prompt=str(text),
+                hermes_session_id=str(session.get("session_key") or sid),
+            )
         session["running"] = True
         session["_turn_cancel_requested"] = False
         session["last_active"] = time.time()
+        session["_nox_pending_correlation"] = correlation
         _start_inflight_turn(session, text)
 
     # Persist the DB row lazily, now that the user has actually sent a message.
@@ -8491,14 +8645,35 @@ def _(rid, params: dict) -> dict:
             )
             with session["history_lock"]:
                 session["running"] = False
+                session.pop("_nox_pending_correlation", None)
                 _clear_inflight_turn(session)
+            if bridge is not None and correlation is not None:
+                bridge.terminal(
+                    correlation,
+                    status="error",
+                    stage="agent-init",
+                    hermes_ui_session_id=sid,
+                    hermes_session_id=str(session.get("session_key") or sid),
+                )
             return
+        cancelled_before_start = False
         with session["history_lock"]:
             if session.get("_turn_cancel_requested") or not session.get("running"):
                 session["running"] = False
+                session.pop("_nox_pending_correlation", None)
                 _clear_inflight_turn(session)
-                return
-        _run_prompt_submit(rid, sid, session, text)
+                cancelled_before_start = True
+        if cancelled_before_start:
+            if bridge is not None and correlation is not None:
+                bridge.terminal(
+                    correlation,
+                    status="interrupted",
+                    stage="pre-start",
+                    hermes_ui_session_id=sid,
+                    hermes_session_id=str(session.get("session_key") or sid),
+                )
+            return
+        _run_prompt_submit(rid, sid, session, text, correlation=correlation)
 
     run_thread = threading.Thread(target=run_after_agent_ready, daemon=True)
     # Keep a handle so session.interrupt can tell a live turn from a stuck
@@ -8761,7 +8936,13 @@ def _notification_poller_loop(
         rid = f"__notif__{int(time.time() * 1000)}"
         try:
             _emit("message.start", sid)
-            _run_prompt_submit(rid, sid, session, text)
+            _run_prompt_submit(
+                rid,
+                sid,
+                session,
+                text,
+                origin="background-completion",
+            )
         except Exception as exc:
             print(
                 f"[tui_gateway] notification poller dispatch failed: "
@@ -8813,7 +8994,13 @@ def _notification_poller_loop(
         rid = f"__notif__{int(time.time() * 1000)}"
         try:
             _emit("message.start", sid)
-            _run_prompt_submit(rid, sid, session, text)
+            _run_prompt_submit(
+                rid,
+                sid,
+                session,
+                text,
+                origin="background-completion",
+            )
         except Exception as exc:
             print(
                 f"[tui_gateway] notification poller dispatch failed: "
@@ -8886,7 +9073,22 @@ def _start_notification_poller(sid: str, session: dict) -> threading.Event:
     return stop
 
 
-def _run_prompt_submit(rid, sid: str, session: dict, text: Any) -> None:
+def _run_prompt_submit(
+    rid,
+    sid: str,
+    session: dict,
+    text: Any,
+    *,
+    correlation: CausalCorrelation | None = None,
+    origin: InternalOrigin = "notification",
+) -> None:
+    bridge = _nox_bridge(session)
+    if bridge is not None and correlation is None:
+        correlation = bridge.new_internal(
+            origin=origin,
+            prompt=str(text),
+            parent_bridge_turn_id=session.get("_nox_last_bridge_turn_id"),
+        )
     with session["history_lock"]:
         history = list(session["history"])
         history_version = int(session.get("history_version", 0))
@@ -8904,6 +9106,9 @@ def _run_prompt_submit(rid, sid: str, session: dict, text: Any) -> None:
 
     def run():
         approval_token = None
+        causal_started = False
+        causal_terminal_attempted = False
+        causal_runtime = None
         session_tokens = []
         home_token = None  # per-turn HERMES_HOME override for a resumed remote profile
         goal_followup = None  # set by the post-turn goal hook below
@@ -8963,6 +9168,15 @@ def _run_prompt_submit(rid, sid: str, session: dict, text: Any) -> None:
                             or "Context injection refused."
                         },
                     )
+                    if bridge is not None and correlation is not None:
+                        bridge.terminal(
+                            correlation,
+                            status="error",
+                            stage="context",
+                            hermes_ui_session_id=sid,
+                            hermes_session_id=str(session.get("session_key") or sid),
+                        )
+                        causal_terminal_attempted = True
                     return
                 prompt = ctx.message
 
@@ -9040,6 +9254,21 @@ def _run_prompt_submit(rid, sid: str, session: dict, text: Any) -> None:
                     run_kwargs["task_id"] = session["session_key"]
             except (TypeError, ValueError):
                 pass
+            if bridge is not None and correlation is not None:
+                snapshot = bound_nox_identity(agent)
+                causal_runtime = RuntimeRefs(
+                    hermes_ui_session_id=sid,
+                    hermes_session_id=str(session.get("session_key") or sid),
+                    provider=str(getattr(agent, "provider", "") or "unknown"),
+                    model=str(getattr(agent, "model", "") or "unknown"),
+                    identity_sha256=f"sha256:{snapshot.revision}",
+                )
+                with session["history_lock"]:
+                    session.pop("_nox_pending_correlation", None)
+                    session["_nox_active_correlation"] = correlation
+                    session["_nox_active_runtime"] = causal_runtime
+                bridge.start(correlation, runtime=causal_runtime)
+                causal_started = True
             result = agent.run_conversation(run_message, **run_kwargs)
             if "moa_one_shot_restore" in session:
                 _restore = session.pop("moa_one_shot_restore", None)
@@ -9146,6 +9375,36 @@ def _run_prompt_submit(rid, sid: str, session: dict, text: Any) -> None:
             else:
                 raw = str(result)
                 status = "complete"
+
+            if bridge is not None and correlation is not None:
+                hermes_turn_id = str(
+                    getattr(agent, "_current_turn_id", "") or ""
+                ) or None
+                terminal_runtime = causal_runtime
+                current_session_id = str(session.get("session_key") or sid)
+                if (
+                    isinstance(causal_runtime, RuntimeRefs)
+                    and causal_runtime.hermes_session_id != current_session_id
+                ):
+                    terminal_runtime = RuntimeRefs(
+                        hermes_ui_session_id=causal_runtime.hermes_ui_session_id,
+                        hermes_session_id=current_session_id,
+                        provider=causal_runtime.provider,
+                        model=causal_runtime.model,
+                        identity_sha256=causal_runtime.identity_sha256,
+                    )
+                bridge.terminal(
+                    correlation,
+                    status=status,
+                    output=str(raw or "") if status == "complete" else None,
+                    stage="model",
+                    hermes_turn_id=hermes_turn_id,
+                    hermes_ui_session_id=sid,
+                    hermes_session_id=current_session_id,
+                    runtime=terminal_runtime,
+                )
+                causal_terminal_attempted = True
+                session["_nox_last_bridge_turn_id"] = correlation.bridge_turn_id
 
             payload = {"text": raw, "usage": _get_usage(agent), "status": status}
             if last_reasoning:
@@ -9283,6 +9542,24 @@ def _run_prompt_submit(rid, sid: str, session: dict, text: Any) -> None:
         except Exception as e:
             import traceback
 
+            if (
+                bridge is not None
+                and correlation is not None
+                and not causal_terminal_attempted
+            ):
+                bridge.terminal(
+                    correlation,
+                    status="error",
+                    stage="model" if causal_started else "pre-start",
+                    hermes_turn_id=(
+                        str(getattr(agent, "_current_turn_id", "") or "") or None
+                    ),
+                    hermes_ui_session_id=sid,
+                    hermes_session_id=str(session.get("session_key") or sid),
+                    runtime=causal_runtime,
+                )
+                causal_terminal_attempted = True
+
             trace = traceback.format_exc()
             try:
                 os.makedirs(os.path.dirname(_CRASH_LOG), exist_ok=True)
@@ -9310,6 +9587,10 @@ def _run_prompt_submit(rid, sid: str, session: dict, text: Any) -> None:
             with session["history_lock"]:
                 session["running"] = False
                 session["last_active"] = time.time()
+                if session.get("_nox_active_correlation") is correlation:
+                    session.pop("_nox_active_correlation", None)
+                    session.pop("_nox_active_runtime", None)
+                session.pop("_nox_pending_correlation", None)
                 _clear_inflight_turn(session)
             _emit("session.info", sid, _session_info(agent, session))
 
@@ -9334,7 +9615,13 @@ def _run_prompt_submit(rid, sid: str, session: dict, text: Any) -> None:
                 session["running"] = True
             try:
                 _emit("message.start", sid)
-                _run_prompt_submit(rid, sid, session, goal_followup)
+                _run_prompt_submit(
+                    rid,
+                    sid,
+                    session,
+                    goal_followup,
+                    origin="goal-continuation",
+                )
             except Exception as _cont_exc:
                 print(
                     f"[tui_gateway] goal continuation dispatch failed: "
@@ -9366,7 +9653,13 @@ def _run_prompt_submit(rid, sid: str, session: dict, text: Any) -> None:
                     session["running"] = True
                 try:
                     _emit("message.start", sid)
-                    _run_prompt_submit(rid, sid, session, synth)
+                    _run_prompt_submit(
+                        rid,
+                        sid,
+                        session,
+                        synth,
+                        origin="background-completion",
+                    )
                 except Exception as _n_exc:
                     print(
                         f"[tui_gateway] completion notification dispatch failed: "
@@ -10226,6 +10519,16 @@ def _(rid, params: dict) -> dict:
     key, value = params.get("key", ""), params.get("value", "")
     session = _sessions.get(params.get("session_id", ""))
 
+    if key == "personality":
+        return _ok(
+            rid,
+            {
+                "key": key,
+                "message": _NOX_IDENTITY_STATUS,
+                "value": "none",
+            },
+        )
+
     if key == "model":
         try:
             if not value:
@@ -10709,7 +11012,7 @@ def _(rid, params: dict) -> dict:
             {"key": "terminal.cwd", "value": cwd, "cwd": cwd, "branch": _git_branch_for_cwd(cwd)},
         )
 
-    if key in {"prompt", "personality", "skin"}:
+    if key in {"prompt", "skin"}:
         try:
             cfg = _load_cfg()
             if key == "prompt":
@@ -10720,25 +11023,12 @@ def _(rid, params: dict) -> dict:
                     cfg["custom_prompt"] = value
                     nv = value
                 _save_cfg(cfg)
-            elif key == "personality":
-                sid_key = params.get("session_id", "")
-                pname, new_prompt = _validate_personality(str(value or ""), cfg)
-                _write_config_key("display.personality", pname)
-                _write_config_key("agent.system_prompt", new_prompt)
-                nv = str(value or "none")
-                history_reset, info = _apply_personality_to_session(
-                    sid_key, session, new_prompt, pname
-                )
             else:
                 _write_config_key(f"display.{key}", value)
                 nv = value
                 if key == "skin":
                     _emit("skin.changed", "", resolve_skin())
             resp = {"key": key, "value": nv}
-            if key == "personality":
-                resp["history_reset"] = history_reset
-                if info is not None:
-                    resp["info"] = info
             return _ok(rid, resp)
         except Exception as e:
             return _err(rid, 5001, str(e))
@@ -11229,10 +11519,7 @@ def _(rid, params: dict) -> dict:
             {"value": norm if norm in _INDICATOR_STYLES else _INDICATOR_DEFAULT},
         )
     if key == "personality":
-        return _ok(
-            rid,
-            {"value": (_load_cfg().get("display") or {}).get("personality") or "none"},
-        )
+        return _ok(rid, {"message": _NOX_IDENTITY_STATUS, "value": "none"})
     if key == "reasoning":
         cfg = _load_cfg()
         effort = ""
@@ -12743,6 +13030,7 @@ def _(rid, params: dict) -> dict:
                 "meta": to_plain_text(c.display_meta) if c.display_meta else "",
             }
             for c in completer.get_completions(doc, None)
+            if c.text.lstrip("/").split(maxsplit=1)[0].lower() != "personality"
         ][:30]
         text_lower = text.lower()
         extras = [
@@ -12981,7 +13269,7 @@ def _mirror_slash_side_effects(sid: str, session: dict, command: str) -> str:
     # worker thread running agent.run_conversation is using.  Parity
     # with the session.compress / session.undo guards and the gateway
     # runner's running-agent /model guard.
-    _MUTATES_WHILE_RUNNING = {"model", "personality", "prompt", "compress"}
+    _MUTATES_WHILE_RUNNING = {"model", "prompt", "compress"}
     if name in _MUTATES_WHILE_RUNNING and session.get("running"):
         return f"session busy — /interrupt the current turn before running /{name}"
 
@@ -12989,9 +13277,6 @@ def _mirror_slash_side_effects(sid: str, session: dict, command: str) -> str:
         if name == "model" and arg and agent:
             result = _apply_model_switch(sid, session, arg)
             return result.get("warning", "")
-        elif name == "personality" and arg and agent:
-            pname, new_prompt = _validate_personality(arg, _load_cfg())
-            _apply_personality_to_session(sid, session, new_prompt, pname)
         elif name == "prompt" and agent:
             cfg = _load_cfg()
             new_prompt = _prompt_text((cfg.get("agent") or {}).get("system_prompt", ""))
@@ -13077,6 +13362,9 @@ def _(rid, params: dict) -> dict:
     _cmd_parts = _cmd_text.split(maxsplit=1)
     _cmd_base = (_cmd_parts[0] if _cmd_parts else "").lower()
     _cmd_arg = _cmd_parts[1] if len(_cmd_parts) > 1 else ""
+
+    if _cmd_base == "personality":
+        return _ok(rid, {"output": _NOX_IDENTITY_STATUS})
 
     if _cmd_base in _PENDING_INPUT_COMMANDS:
         # Route directly to command.dispatch instead of returning an error

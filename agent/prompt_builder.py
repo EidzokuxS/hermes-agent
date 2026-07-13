@@ -1819,7 +1819,7 @@ def _truncate_content(
 def load_soul_md(context_length: Optional[int] = None) -> Optional[str]:
     """Load SOUL.md from HERMES_HOME and return its content, or None.
 
-    Used as the agent identity (slot #1 in the system prompt).  When this
+    Used as an additive profile after the canonical Nox identity. When this
     returns content, ``build_context_files_prompt`` should be called with
     ``skip_soul=True`` so SOUL.md isn't injected twice.
     """

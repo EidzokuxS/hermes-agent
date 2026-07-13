@@ -4,7 +4,8 @@
 - **Verdict:** aligned
 - **Date:** 2026-07-12
 - **Reviewed plan:** `docs/goals/nox-hermes-foundation-migration/PLAN.md`
-- **PLAN SHA-256:** `F453963F6B002C9DA343E8A100FE429E66896AFC7BBAECC318955B4896B6D493`
+- **Accepted pre-execution PLAN SHA-256:** `F453963F6B002C9DA343E8A100FE429E66896AFC7BBAECC318955B4896B6D493`
+- **Current terminology-only PLAN SHA-256:** `9B2B14C223B7C0ED7265524431EB5BB34A88A4BAFF2859B178E3141D7070B559`
 - **Blockers:** 0
 - **Majors:** 0
 - **Minors:** 0
@@ -18,8 +19,8 @@ The plan was checked against the Krypton PRE contract for outcome clarity, sourc
 - Replaced the donor-slice model with an exact full-tree foundation import and a path-level collision/provenance manifest.
 - Removed the contradiction between importing the Hermes `apps/desktop` collision at Task 0 and deleting legacy paths at Task 6: the custom Desktop remains in rollback history, not as a second production tree.
 - Separated Hermes operational session truth from Nox causal/constitutional truth; the bridge labels Hermes outcomes `observed` and stores no shadow transcript.
-- Fixed the mask seam to a stable identity tier rather than dynamic per-turn injection; profile `SOUL.md` is additive and cannot own the Nox identity.
-- Added objective default mask thresholds and a separate hash-bound acceptance gate before runtime integration.
+- Fixed Nox to a stable identity tier rather than dynamic per-turn injection; profile `SOUL.md` is additive and cannot own Nox.
+- Added objective default identity thresholds and a separate hash-bound acceptance gate before runtime integration.
 - Grounded Desktop baseline commands in the pinned package scripts and fixed Node/Python version ownership.
 - Distinguished external, queued-external and internal follow-up provenance around the single `_run_prompt_submit` runner instead of instrumenting generic event emission.
 - Made observational bridge failure fail-open for Hermes but fail the Nox acceptance lane, and added process-epoch recovery for in-flight turns.
@@ -28,5 +29,5 @@ The plan was checked against the Krypton PRE contract for outcome clarity, sourc
 
 ## Next gate
 
-Эйдзи accepts the exact PLAN hash. Acceptance releases Task 0 only. Task 2 produces a second required acceptance gate for the canonical Nox mask before Task 3 may begin.
+Эйдзи accepts the exact PLAN hash. Acceptance releases Task 0 only. Task 2 produces a second required acceptance gate for `identity/NOX.md` before Task 3 may begin.
 

@@ -307,6 +307,7 @@ def _restore_or_build_system_prompt(agent, system_message, conversation_history)
     DB roundtrip).
     """
     stored_prompt = None
+    session_row = None
     stored_state = "missing"
     if conversation_history and agent._session_db:
         try:
@@ -327,6 +328,11 @@ def _restore_or_build_system_prompt(agent, system_message, conversation_history)
                 "cache will miss for this turn.",
                 agent.session_id, exc,
             )
+
+    if stored_prompt and session_row is not None:
+        from nox.identity import restore_nox_identity
+
+        restore_nox_identity(agent, session_row, stored_prompt)
 
     if stored_prompt and _stored_prompt_matches_runtime(agent, stored_prompt):
         # Continuing session — reuse the exact system prompt from the
@@ -393,7 +399,14 @@ def _restore_or_build_system_prompt(agent, system_message, conversation_history)
     # subsequent turn).
     if agent._session_db:
         try:
-            agent._session_db.update_system_prompt(agent.session_id, agent._cached_system_prompt)
+            from nox.identity import identity_persistence_fields
+
+            identity_fields = identity_persistence_fields(agent)
+            agent._session_db.update_system_prompt(
+                agent.session_id,
+                agent._cached_system_prompt,
+                **identity_fields,
+            )
         except Exception as exc:
             logger.warning(
                 "Session DB update_system_prompt failed for session %s: "

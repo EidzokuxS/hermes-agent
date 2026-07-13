@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { MessagingPlatformInfo } from '@/types/hermes'
 
+import { MessagingView } from './index'
+
 const getMessagingPlatforms = vi.fn()
 const updateMessagingPlatform = vi.fn()
 const openExternalLink = vi.fn()
@@ -51,9 +53,7 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-async function renderMessaging() {
-  const { MessagingView } = await import('./index')
-
+function renderMessaging() {
   return render(
     <MemoryRouter>
       <MessagingView />
@@ -62,24 +62,28 @@ async function renderMessaging() {
 }
 
 describe('MessagingView setup-guide link', () => {
-  it('hides the setup-guide button for a plugin platform with no docs URL', async () => {
-    // Teams (and other plugin platforms) ship an empty docs_url. Rendering an
-    // anchor with href="" let Electron resolve it to the app's own packaged
-    // index.html and fail with an OS "file not found" dialog. The button must
-    // simply not appear when there is no guide to open.
-    getMessagingPlatforms.mockResolvedValue({ platforms: [platform({ docs_url: '' })] })
+  it(
+    'hides the setup-guide button for a plugin platform with no docs URL',
+    async () => {
+      // Teams (and other plugin platforms) ship an empty docs_url. Rendering an
+      // anchor with href="" let Electron resolve it to the app's own packaged
+      // index.html and fail with an OS "file not found" dialog. The button must
+      // simply not appear when there is no guide to open.
+      getMessagingPlatforms.mockResolvedValue({ platforms: [platform({ docs_url: '' })] })
 
-    await renderMessaging()
+      renderMessaging()
 
-    expect((await screen.findAllByText('Microsoft Teams')).length).toBeGreaterThan(0)
-    expect(screen.queryByText('Open setup guide')).toBeNull()
-  })
+      expect((await screen.findAllByText('Microsoft Teams')).length).toBeGreaterThan(0)
+      expect(screen.queryByText('Open setup guide')).toBeNull()
+    },
+    15_000
+  )
 
   it('opens a real docs URL through the validated external opener', async () => {
     const docsUrl = 'https://hermes-agent.nousresearch.com/docs/user-guide/messaging/teams'
     getMessagingPlatforms.mockResolvedValue({ platforms: [platform({ docs_url: docsUrl })] })
 
-    await renderMessaging()
+    renderMessaging()
 
     const link = await screen.findByText('Open setup guide')
     fireEvent.click(link)

@@ -69,6 +69,8 @@ hermes_cli/web_dist/
 apps/desktop/build/
 apps/desktop/dist/
 apps/desktop/release/
+apps/desktop/release-qa/
+/build/
 apps/desktop/*.tsbuildinfo
 
 # Web UI assets — synced from @nous-research/ui at build time via
@@ -168,3 +170,4 @@ artifacts/evidence/hermes-foundation/*
 # Historical inputs explicitly outside the implementation graph.
 NOX-RETHINK.md
 REFERENCE ONLY/
+.gitnexus

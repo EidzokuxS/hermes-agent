@@ -1,5 +1,10 @@
 import fs from 'node:fs'
 
+const BACKEND_HEALTH_PATH = '/api/health'
+const LEGACY_BACKEND_HEALTH_PATH = '/api/status'
+
+type BackendJsonFetcher = (url: string, token: string, options?: { timeoutMs?: number }) => Promise<unknown>
+
 // `hermes serve` announces HERMES_BACKEND_READY; the legacy `hermes dashboard`
 // backend announces HERMES_DASHBOARD_READY. Accept either so the desktop spawn
 // works against both the headless backend and old/dashboard runtimes.
@@ -17,6 +22,35 @@ const DEFAULT_PORT_ANNOUNCE_TIMEOUT_MS = 90_000
 // Never trust a deadline tighter than the warm-start path needs; floor at 45s
 // (the historical default) so a malformed override can't reintroduce the loop.
 const MIN_PORT_ANNOUNCE_TIMEOUT_MS = 45_000
+
+function isMissingHealthEndpoint(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error)
+
+  return message.startsWith('404:') || message.includes('but got HTML')
+}
+
+/**
+ * Probe the cheap readiness endpoint without forcing the full status payload
+ * to wait on cold gateway imports. Older backends do not expose /api/health,
+ * so a definite missing-route response falls back to the historical
+ * /api/status probe.
+ */
+async function probeBackendReadiness(
+  fetchJson: BackendJsonFetcher,
+  baseUrl: string,
+  token: string,
+  timeoutMs?: number
+) {
+  try {
+    return await fetchJson(`${baseUrl}${BACKEND_HEALTH_PATH}`, token, { timeoutMs })
+  } catch (error) {
+    if (!isMissingHealthEndpoint(error)) {
+      throw error
+    }
+
+    return fetchJson(`${baseUrl}${LEGACY_BACKEND_HEALTH_PATH}`, token, { timeoutMs })
+  }
+}
 
 /**
  * Resolve the port-announcement deadline. Honors the
@@ -87,7 +121,7 @@ function waitForDashboardPort(child, timeoutMs = resolvePortAnnounceTimeoutMs())
 
     function onExit(code, signal) {
       cleanup()
-      reject(new Error(`Hermes backend: exited before port announcement (${signal || code})`))
+      reject(new Error(`Nox backend: exited before port announcement (${signal || code})`))
     }
 
     function onError(err) {
@@ -97,7 +131,7 @@ function waitForDashboardPort(child, timeoutMs = resolvePortAnnounceTimeoutMs())
 
     const timer = setTimeout(() => {
       cleanup()
-      reject(new Error(`Timed out waiting for Hermes backend port announcement (${timeoutMs}ms)`))
+      reject(new Error(`Timed out waiting for Nox backend port announcement (${timeoutMs}ms)`))
     }, timeoutMs)
 
     child.stdout.on('data', onData)
@@ -151,7 +185,7 @@ function waitForDashboardReadyFile(readyFile, child, timeoutMs = resolvePortAnno
 
     function onExit(code, signal) {
       cleanup()
-      reject(new Error(`Hermes backend: exited before port announcement (${signal || code})`))
+      reject(new Error(`Nox backend: exited before port announcement (${signal || code})`))
     }
 
     function onError(err) {
@@ -161,7 +195,7 @@ function waitForDashboardReadyFile(readyFile, child, timeoutMs = resolvePortAnno
 
     const timer = setTimeout(() => {
       cleanup()
-      reject(new Error(`Timed out waiting for Hermes backend port announcement (${timeoutMs}ms)`))
+      reject(new Error(`Timed out waiting for Nox backend port announcement (${timeoutMs}ms)`))
     }, timeoutMs)
 
     child.on('exit', onExit)
@@ -192,8 +226,11 @@ function waitForDashboardPortAnnouncement(
 }
 
 export {
+  BACKEND_HEALTH_PATH,
   DEFAULT_PORT_ANNOUNCE_TIMEOUT_MS,
+  LEGACY_BACKEND_HEALTH_PATH,
   MIN_PORT_ANNOUNCE_TIMEOUT_MS,
+  probeBackendReadiness,
   readDashboardReadyFile,
   resolvePortAnnounceTimeoutMs,
   waitForDashboardPort,

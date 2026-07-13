@@ -267,6 +267,19 @@ def test_locale_catalogs_ship_in_both_wheel_and_sdist():
     assert on_disk, "expected locales/*.yaml catalogs on disk"
 
 
+def test_nox_identity_and_runtime_ship_in_both_wheel_and_sdist():
+    """A packaged Desktop must build the same Nox prompt as the source tree."""
+    data = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    include = data["tool"]["setuptools"]["packages"]["find"]["include"]
+    assert "nox" in include and "nox.*" in include
+
+    data_files = data["tool"]["setuptools"].get("data-files", {})
+    assert data_files.get("identity") == ["identity/NOX.md"]
+
+    manifest = (REPO_ROOT / "MANIFEST.in").read_text(encoding="utf-8")
+    assert "include identity/NOX.md" in manifest
+
+
 # ---------------------------------------------------------------------------
 # Dependency-pin consistency: pyproject extras <-> tools/lazy_deps.py
 #

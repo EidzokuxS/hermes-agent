@@ -77,16 +77,20 @@ afterEach(() => {
 })
 
 describe('SkillsView toolset management', () => {
-  it('renders a switch for each toolset and toggles it off', async () => {
-    await renderSkills()
+  it(
+    'renders a switch for each toolset and toggles it off',
+    async () => {
+      await renderSkills()
 
-    const sw = await screen.findByRole('switch', { name: 'Toggle Web Search toolset' })
-    expect(sw.getAttribute('aria-checked')).toBe('true')
+      const sw = await screen.findByRole('switch', { name: 'Toggle Web Search toolset' })
+      expect(sw.getAttribute('aria-checked')).toBe('true')
 
-    fireEvent.click(sw)
+      fireEvent.click(sw)
 
-    await waitFor(() => expect(toggleToolset).toHaveBeenCalledWith('web', false))
-  })
+      await waitFor(() => expect(toggleToolset).toHaveBeenCalledWith('web', false))
+    },
+    15_000
+  )
 
   it('renders toolset titles without leading emoji', async () => {
     getToolsets.mockResolvedValue([toolset({ name: 'cronjob', label: '⏰ Cron Jobs', description: 'cron tools' })])

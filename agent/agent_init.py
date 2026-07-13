@@ -376,8 +376,8 @@ def init_agent(
             (SOUL.md, .hermes.md, AGENTS.md, CLAUDE.md, .cursorrules) from the cwd / HERMES_HOME
             into the system prompt. Use this for batch processing and data generation to avoid
             polluting trajectories with user-specific persona or project instructions.
-        load_soul_identity (bool): If True, still use ~/.hermes/SOUL.md as the primary
-            identity even when skip_context_files=True. Project context files from the cwd
+        load_soul_identity (bool): If True, still use ~/.hermes/SOUL.md as an additive
+            profile even when skip_context_files=True. Project context files from the cwd
             remain skipped.
     """
     _install_safe_stdio()
@@ -1270,6 +1270,8 @@ def init_agent(
     
     # Cached system prompt -- built once per session, only rebuilt on compression
     agent._cached_system_prompt: Optional[str] = None
+    agent._nox_identity_snapshot = None
+    agent._preserve_system_prompt_snapshot = False
     
     # Filesystem checkpoint manager (transparent — not a tool)
     from tools.checkpoint_manager import CheckpointManager

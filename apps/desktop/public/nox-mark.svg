@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title">
+  <title id="title">Nox</title>
+  <rect width="1024" height="1024" rx="224" fill="#0b0e14"/>
+  <rect x="18" y="18" width="988" height="988" rx="206" fill="none" stroke="#30384b" stroke-width="36"/>
+  <path d="M284 752V272" fill="none" stroke="#f2f4f8" stroke-linecap="round" stroke-width="104"/>
+  <path d="M284 272L740 752" fill="none" stroke="#7f9cff" stroke-linecap="round" stroke-linejoin="round" stroke-width="104"/>
+  <path d="M740 752V272" fill="none" stroke="#f2f4f8" stroke-linecap="round" stroke-width="104"/>
+</svg>

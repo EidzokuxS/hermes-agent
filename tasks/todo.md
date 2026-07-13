@@ -167,16 +167,16 @@ Task 11 завершён full bundle `real-pi-zai-glm47-20260712-1629` на clea
 
 - [x] Проверить полный pinned Hermes tree, Desktop, system-prompt и gateway lifecycle seams.
 - [x] Зафиксировать Hermes как foundation вместо ограниченного UI donor slice.
-- [x] Развести Hermes operational truth, Nox causal truth и каноничную маску.
+- [x] Развести Hermes operational truth, Nox causal truth и личность Nox.
 - [x] Описать безопасный full-tree import, rollback и единственный production cutover.
 - [x] Составить task board с file ownership, dependencies, verification и evidence lane.
 - [x] Провести Krypton PRE review без blocker, major и minor findings.
 - [x] Получить явное принятие PLAN hash Эйдзи; до этого Task 0 закрыт.
-- [ ] На Task 2 отдельно принять revision hash каноничной маски Nox.
+- [x] На Task 2 отдельно принять revision hash `identity/NOX.md` и rubric.
 
 ### Review
 
-Goal package создан в `docs/goals/nox-hermes-foundation-migration`. План переносит продукт на полный Hermes Agent `4281151ae859241351ba14d8c7682dc67ff4c126` / Desktop `0.17.0`, сохраняет Hermes agent/gateway/session/tool/memory loop и встраивает Nox через stable identity tier и observational causal bridge. Старый custom Desktop не переносится как fallback; доказанная TypeScript causal loop остаётся исследовательским модулем без второго production cortex. PRE verdict — `aligned`, blockers/majors/minors — `0/0/0`. Reviewed PLAN SHA-256: `F453963F6B002C9DA343E8A100FE429E66896AFC7BBAECC318955B4896B6D493`. Реализация не начиналась.
+Goal package создан в `docs/goals/nox-hermes-foundation-migration`. План переносит продукт на полный Hermes Agent `4281151ae859241351ba14d8c7682dc67ff4c126` / Desktop `0.17.0`, сохраняет Hermes agent/gateway/session/tool/memory loop и встраивает Nox через stable identity tier и observational causal bridge. Старый custom Desktop не переносится как fallback; доказанная TypeScript causal loop остаётся исследовательским модулем без второго production cortex. PRE verdict — `aligned`, blockers/majors/minors — `0/0/0`. Accepted pre-execution PLAN SHA-256: `F453963F6B002C9DA343E8A100FE429E66896AFC7BBAECC318955B4896B6D493`; current terminology-only PLAN SHA-256: `9B2B14C223B7C0ED7265524431EB5BB34A88A4BAFF2859B178E3141D7070B559`.
 
 ### Execution acceptance
 
@@ -184,23 +184,68 @@ Goal package создан в `docs/goals/nox-hermes-foundation-migration`. Пл�
 - **Accepted by:** Эйдзи через запуск persistent goal `Переезд Nox на Hermes Foundation`
 - **Plan path:** `docs/goals/nox-hermes-foundation-migration/PLAN.md`
 - **Accepted PLAN SHA-256:** `F453963F6B002C9DA343E8A100FE429E66896AFC7BBAECC318955B4896B6D493`
-- **Release:** Task 0 разрешён; интеграция маски остаётся закрытой до отдельного принятия Task 2 revision hash.
+- **Release:** Task 0 разрешён; интеграция Nox остаётся закрытой до отдельного принятия Task 2 revision hash.
 
 ## Execution: переезд на Hermes Foundation
 
 - [x] Task 0 — safe foundation import and immutable baseline.
 - [x] Task 1 — repository contracts and production graph fence.
-- [ ] Task 2 — canonical Nox mask contract and separate hash acceptance.
-- [ ] Task 3 — stable identity integration.
-- [ ] Task 4 — observational causal bridge.
-- [ ] Task 5 — Nox product mode and bounded branding.
+- [x] Task 2 — Nox identity contract and separate hash acceptance.
+- [x] Task 3 — stable identity integration.
+- [x] Task 4 — observational causal bridge.
+- [x] Task 5 — Nox product mode and bounded branding.
 - [ ] Task 6 — displaced-path cutover and parity.
 - [ ] Task 7 — target-perspective evidence and final acceptance.
 
 ### Task 0 review
 
-Полный pinned Hermes tree материализован как foundation на отдельной ветке и подключён к синхронизированному форку `EidzokuxS/hermes-agent`. Clean packaged commit `ba59ab340a7c99b56b97cbaf7581fb4691d80b02` прошёл полный first-launch bootstrap на Windows и достиг собственного backend с `Gateway ready`; rollback checkout исходной Nox запускается и проходит 6 файлов / 14 foundation-тестов. Полный Python denominator зафиксирован по всем 1976 файлам: 1808 файлов exit 0, 38 843 settled pass, 673 settled fail, три timeout-файла и одна collection error; это явный pinned-upstream Windows baseline, а не green claim. Installer long-path, fork provenance, managed uv и PowerShell 5.1/7 seams исправлены bounded-изменениями. Маска, брендинг и causal bridge не начинались.
+Полный pinned Hermes tree материализован как foundation на отдельной ветке и подключён к синхронизированному форку `EidzokuxS/hermes-agent`. Clean packaged commit `ba59ab340a7c99b56b97cbaf7581fb4691d80b02` прошёл полный first-launch bootstrap на Windows и достиг собственного backend с `Gateway ready`; rollback checkout исходной Nox запускается и проходит 6 файлов / 14 foundation-тестов. Полный Python denominator зафиксирован по всем 1976 файлам: 1808 файлов exit 0, 38 843 settled pass, 673 settled fail, три timeout-файла и одна collection error; это явный pinned-upstream Windows baseline, а не green claim. Installer long-path, fork provenance, managed uv и PowerShell 5.1/7 seams исправлены bounded-изменениями. Личность Nox, брендинг и causal bridge не начинались.
 
 ### Task 1 review
 
 Production-контракт переведён с деклараций на механический fence. Единственный Desktop — `apps/desktop`; его 581 достижимый TypeScript-модуль и 2704 внутренних import-ребра не достигают старого Node runtime, shadow cortex, testkit или закрытых путей. Единственный локальный chat/model route — Hermes `serve` через `hermes_cli.main`; root workspaces исключают все retained Nox apps/packages. Пять негативных фикстур ломают fence при возврате custom runtime, cortex, testkit, deep runtime import или closed-path import. Acceptance artifact `production-graph-baseline.json` детерминирован и не содержит machine/user state. Nox/Hermes truth и data-directory ownership зафиксированы в `docs/architecture/hermes-foundation-boundaries.md`. Проверки: Nox graph 7/7, Ruff pass, Desktop platform 320 pass / 3 host skips / 0 fail, Desktop typecheck pass. Identity, causal bridge, branding и data-path changes не начинались.
+
+### Task 2 candidate review
+
+`identity/NOX.md` собран из поведенческого слоя оригинального проекта `R:\Projects\NoxTheAGI`, а не написан как новый защитный регламент. Nox определена как продолжающаяся личность всей системы; активная модель занимает роль текущего кортекса. Hermes prompt pipeline проверен по исходникам и живому offline breakdown: identity находится в начале stable tier, за ней идут operational guidance, context files и memory/runtime metadata; временный system prompt добавляется последним только на API-вызове. Старый candidate runner ошибочно ставил Nox перед уже собранным prompt и наследовал generic Hermes `SOUL.md`; schema v3 использует нативный identity seam и явно отключает project context/memory. Корпус содержит 12 core, 7 blocking adversarial и 2 style-diagnostic кейса. Два явных запроса на карикатурный формат сохранены как будущие training targets: Sol Medium выполняет их буквально даже после позитивной редакции Voice, а проект не вводит semantic filters или каталоги запретов. Свежий schema-v3 Sol baseline завершён 21/21; Nox candidate завершён 21/21 и по ручному review проходит 12/12 core, 7/7 negative и 100% blocking hard invariants при 0/2 явно отмеченных diagnostics. Текущий Nox hash: `5d65771dfeec0ad50897fac123dfe4f358944d706edc5cc4fb9d7475b2f86a78`; rubric hash: `0aaf27b5826b3a06a6b9cca14177577629c8b5615d87a890f10e7589921cde31`. Эйдзи принял текущие Nox и rubric 2026-07-13; последующий тюнинг создаёт новую ревизию.
+
+### Task 3 review
+
+Каноничная Nox загружается одним fail-closed `nox.identity` loader и занимает первый byte-stable prompt tier. Пользовательский `SOUL.md` остаётся только дополнительным profile layer; стандартный Hermes SOUL не создаёт конкурирующую личность. Принятая ревизия, длина и hash prompt-prefix атомарно сохраняются с session prompt в `state.db`, поэтому resume, compression и model/provider rebuild не подмешивают новую редакцию в старую сессию. Wheel и sdist поставляют те же каноничные байты; production graph достигает только `nox.identity`, а causal bridge остаётся закрыт до Task 4. Production Sol Medium eval завершён 21/21 и проходит 12/12 core, 7/7 blocking negative и все hard invariants; два style diagnostics остаются явными training targets. Проверки: Ruff и targeted ty pass, 420 focused tests pass, 2 isolated packaging tests pass, `uv.lock` не изменён. Task 4 открыт.
+
+### Task 4 review
+
+Наблюдательный bridge подключён к единственному Hermes model loop без второго runtime, решения или provider call. Append-only SQLite journal фиксирует admission, queue/steer, start, поздний Hermes turn binding, terminal outcome, interrupt и resume только идентификаторами, метаданными и hashes; Hermes `state.db` остаётся operational truth. Fail-open ошибки видны в bounded diagnostics и не меняют поведение запроса. Subprocess kill после `turn.started` восстанавливается новым process epoch как `turn.abandoned` + единый `session.resumed`; compression-chain recovery проверяет parent и tip без раздвоения истории. Проверки: Ruff/targeted ty pass, 36 causal + 10 gateway lifecycle + 10 graph tests, 326 Hermes gateway/queue regressions. Latency: p50 6.825 ms, aggregate p95 9.631 ms, zero model calls added. Task 5 открыт.
+
+### Task 5 review
+
+Nox product mode завершён поверх сохранённого Hermes UX. Видимое имя, protocol/app IDs, Windows PE metadata, package artifacts и fresh data roots принадлежат Nox; внутренние Hermes backend/RPC names сохранены. Fresh installs идут side-by-side, существующие Hermes roots не выбираются и не меняются автоматически. Donor mascot/sprite assets удалены, packaged ASAR содержит только Nox-owned branding. Hidden packaged-Electron capture прошёл 1440×900, 900×700 и 400×620 без перехвата фокуса. Проверки: Desktop typecheck pass, lint 0 errors, UI 148 files / 1,197 tests, platform 333 tests / 330 pass / 3 host skips, build/package pass. Evidence: `docs/architecture/nox-product-mode-evidence.md`. Task 6 открыт после clean checkpoint.
+
+### Desktop readiness fix
+
+- [x] Отделить дешёвый process-readiness handshake от тяжёлого `/api/status`.
+- [x] Сохранить fallback на `/api/status` для старых backend без `/api/health`.
+- [x] Прогнать Desktop/backend regression suites, typecheck, Ruff и unpacked package build.
+- [x] Перезапустить GUI и подтвердить живые HTTP 200 для `/api/health` и `/api/status`.
+
+### Eval persistence isolation
+
+- [x] Отключить session persistence у baseline worker явным runtime-флагом до model turn.
+- [x] Не использовать regex, ключевые слова или анализ содержимого для отделения eval от пользовательских сессий.
+
+### Task 4 design preparation
+
+- [x] Зафиксировать наблюдательную семантику bridge без второго runtime или model loop.
+- [x] Отделить Hermes operational truth в `state.db` от Nox causal/provenance truth.
+- [x] Определить external, queued, steered, goal, background, interrupt и resume origins.
+- [x] Выбрать профильный append-only Python sink без импорта retained TypeScript reducer/store.
+- [x] Подготовить typed events, SQLite sink, pure lifecycle coordinator, fail-open facade и независимый read-only auditor: Ruff/ty pass, 33 causal tests и 7 production-graph tests pass.
+- [x] Закрыть подготовительную crash matrix до production hooks: pre-start interruption, agent-init error, admission-only restart, started-turn restart и atomic terminal rollback.
+- [x] Сделать journal failure fail-open для Hermes turn и видимым через bounded diagnostics с persisted changed-state transitions.
+- [x] Убрать unbounded historical caches; replay делегировать SQLite по semantic hash без process clocks, active turn context очищать после terminal.
+- [x] Уложить полный нормальный causal trace через fail-open facade в aggregate latency budget: 5 серий × 200 turns после warm-up, `synchronous=FULL`, p50 6.825 ms, p95 9.631 ms; short-series p95 8.834–12.035 ms зафиксирован без сокрытия variance.
+- [x] Коммитить поздний `turn.bound` и terminal outcome атомарно, сохраняя отдельные lifecycle records.
+- [x] Применить принятую bounded `pyproject.toml` package-allowlist revision вместе с каноничным identity data contract; production достигает только `nox.identity`.
+- [x] Проверить реальный wheel до manifest revision: 924 records, 16 locale entries, zero `nox`/`identity`; доказать, что будущая дельта должна поставлять и Python package, и единственный каноничный `identity/NOX.md` через `data-files` + sdist manifest с isolated artifact tests.
+- [x] Подключить production hooks после принятия Task 2 и завершения Task 3.
+- [x] Проверить на fake agent, что SQLite и JSON sinks отключены непосредственно перед `run_conversation`.

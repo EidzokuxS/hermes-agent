@@ -1838,6 +1838,7 @@ def test_startup_runtime_does_not_call_network_detector(monkeypatch):
 
 def _session(agent=None, **extra):
     return {
+        "_nox_causal_bridge": None,
         "agent": agent if agent is not None else types.SimpleNamespace(),
         "session_key": "session-key",
         "history": [],
@@ -3327,6 +3328,17 @@ def test_complete_slash_drops_removed_provider_alias():
     assert any(item["text"] == "model" for item in resp_model["result"]["items"])
 
 
+def test_complete_slash_hides_personality_command():
+    resp = server.handle_request(
+        {"id": "1", "method": "complete.slash", "params": {"text": "/per"}}
+    )
+
+    assert not any(
+        item["text"].lstrip("/").split(maxsplit=1)[0].lower() == "personality"
+        for item in resp["result"]["items"]
+    )
+
+
 def test_complete_slash_returns_plain_string_fields():
     # prompt_toolkit hands us FormattedText (a list subclass) for
     # display/display_meta; the TUI's CompletionItem contract is plain
@@ -3978,68 +3990,57 @@ def test_config_set_model_switches_agent_without_touching_env(monkeypatch):
         server._sessions.clear()
 
 
-def test_config_set_personality_rejects_unknown_name(monkeypatch):
-    monkeypatch.setattr(
-        server,
-        "_available_personalities",
-        lambda cfg=None: {"helpful": "You are helpful."},
-    )
-    resp = server.handle_request(
-        {
-            "id": "1",
-            "method": "config.set",
-            "params": {"key": "personality", "value": "bogus"},
-        }
-    )
-
-    assert "error" in resp
-    assert "Unknown personality" in resp["error"]["message"]
-
-
-def test_config_set_personality_preserves_history_and_returns_info(monkeypatch):
-    agent = types.SimpleNamespace(
-        ephemeral_system_prompt=None, _cached_system_prompt="old"
-    )
+def test_config_set_personality_preserves_nox_identity(monkeypatch):
     session = _session(
-        agent=agent,
+        agent=types.SimpleNamespace(ephemeral_system_prompt=None),
         history=[{"role": "user", "text": "hi"}],
         history_version=4,
     )
-    emits = []
-
     server._sessions["sid"] = session
     monkeypatch.setattr(
         server,
-        "_available_personalities",
-        lambda cfg=None: {"helpful": "You are helpful."},
+        "_write_config_key",
+        lambda *_args: pytest.fail("personality config must remain unchanged"),
     )
-    monkeypatch.setattr(
-        server, "_session_info", lambda agent, *a: {"model": getattr(agent, "model", "?")}
-    )
-    monkeypatch.setattr(server, "_emit", lambda *args: emits.append(args))
-    monkeypatch.setattr(server, "_write_config_key", lambda path, value: None)
 
     resp = server.handle_request(
         {
             "id": "1",
             "method": "config.set",
-            "params": {"session_id": "sid", "key": "personality", "value": "helpful"},
+            "params": {
+                "session_id": "sid",
+                "key": "personality",
+                "value": "helpful",
+            },
         }
     )
 
-    assert resp["result"]["history_reset"] is False
-    assert resp["result"]["info"] == {"model": "?"}
-    # History is preserved with a pivot marker appended
-    assert len(session["history"]) == 2
-    assert session["history"][0] == {"role": "user", "text": "hi"}
-    assert session["history"][1]["role"] == "user"
-    assert "personality" in session["history"][1]["content"].lower()
-    assert "You are helpful." in session["history"][1]["content"]
-    assert session["history_version"] == 5
-    # Agent's system prompt was updated in-place; cached prompt untouched
-    assert agent.ephemeral_system_prompt == "You are helpful."
-    assert agent._cached_system_prompt == "old"
-    assert ("session.info", "sid", {"model": "?"}) in emits
+    assert resp["result"]["value"] == "none"
+    assert "Nox identity is active" in resp["result"]["message"]
+    assert session["agent"].ephemeral_system_prompt is None
+    assert session["history"] == [{"role": "user", "text": "hi"}]
+    assert session["history_version"] == 4
+
+
+def test_slash_personality_returns_identity_status_without_starting_worker(monkeypatch):
+    session = _session(agent=types.SimpleNamespace(ephemeral_system_prompt=None))
+    server._sessions["sid"] = session
+    monkeypatch.setattr(
+        server,
+        "_SlashWorker",
+        lambda *_args, **_kwargs: pytest.fail("slash worker must not start"),
+    )
+
+    resp = server.handle_request(
+        {
+            "id": "1",
+            "method": "slash.exec",
+            "params": {"session_id": "sid", "command": "/personality helpful"},
+        }
+    )
+
+    assert "Nox identity is active" in resp["result"]["output"]
+    assert session["agent"].ephemeral_system_prompt is None
 
 
 def test_session_compress_uses_compress_helper(monkeypatch):
@@ -5460,7 +5461,7 @@ def test_config_set_model_allowed_when_idle(monkeypatch):
 
 
 def test_mirror_slash_side_effects_rejects_mutating_commands_while_running(monkeypatch):
-    """Slash worker passthrough (e.g. /model, /personality, /prompt,
+    """Slash worker passthrough (e.g. /model, /prompt,
     /compress) must reject during an in-flight turn.  Same race as
     config.set — mutates live agent state while run_conversation is
     reading it."""
@@ -5484,7 +5485,6 @@ def test_mirror_slash_side_effects_rejects_mutating_commands_while_running(monke
 
     for cmd, expected_name in [
         ("/model new/model", "model"),
-        ("/personality default", "personality"),
         ("/prompt", "prompt"),
         ("/compress", "compress"),
     ]:
@@ -7946,7 +7946,7 @@ def test_notification_poller_emits_distinct_watch_matches_once(monkeypatch):
     turns = []
     emitted = []
 
-    def _fake_run_prompt_submit(rid, sid, session, text):
+    def _fake_run_prompt_submit(rid, sid, session, text, **_kwargs):
         turns.append(text)
         with session["history_lock"]:
             session["running"] = False

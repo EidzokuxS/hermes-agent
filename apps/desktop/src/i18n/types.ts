@@ -1357,6 +1357,7 @@ export interface Translations {
   }
 
   composer: {
+    introDescription: string
     message: string
     wakingProfile: (profile: string) => string
     placeholderStarting: string
@@ -1572,6 +1573,7 @@ export interface Translations {
   onboarding: {
     headerTitle: string
     headerDesc: string
+    providerCheckUnavailable: string
     preparingInstall: string
     starting: string
     lookingUpProviders: string

@@ -9,7 +9,7 @@ fork inherits the cached prompt verbatim.
 
 Three tiers are joined with ``\\n\\n``:
 
-* ``stable``   — identity (SOUL.md or DEFAULT_AGENT_IDENTITY), tool
+* ``stable``   — canonical Nox identity, optional SOUL.md profile, tool
   guidance, computer-use guidance, nous subscription block, tool-use
   enforcement guidance + per-model operational guidance, skills prompt,
   alibaba model-name workaround, environment hints, platform hints.
@@ -28,7 +28,6 @@ import os
 from typing import Any, Dict, List, Optional
 
 from agent.prompt_builder import (
-    DEFAULT_AGENT_IDENTITY,
     GOOGLE_MODEL_OPERATIONAL_GUIDANCE,
     HERMES_AGENT_HELP_GUIDANCE,
     KANBAN_GUIDANCE,
@@ -45,6 +44,7 @@ from agent.prompt_builder import (
     drain_truncation_warnings,
 )
 from agent.runtime_cwd import resolve_context_cwd
+from nox.identity import bound_nox_identity, profile_soul_block
 from utils import is_truthy_value
 
 
@@ -146,7 +146,7 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
     """Assemble the system prompt as three ordered parts.
 
     Returns a dict with three keys:
-      * ``stable``   — identity, tool guidance, skills prompt,
+      * ``stable``   — Nox identity, optional profile, tool guidance, skills prompt,
         environment hints, platform hints, model-family operational
         guidance.
       * ``context``  — context files (AGENTS.md, .cursorrules, etc.)
@@ -177,21 +177,20 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
             _ctx_len = _cc_len
 
     # ── Stable tier ────────────────────────────────────────────────
-    stable_parts: List[str] = []
+    identity = bound_nox_identity(agent)
+    stable_parts: List[str] = [identity.prompt_text]
 
-    # Try SOUL.md as primary identity unless the caller explicitly skipped it.
-    # Some execution modes (cron) still want HERMES_HOME persona while keeping
-    # cwd project instructions disabled.
-    _soul_loaded = False
+    # SOUL.md remains user-owned but is now an additive profile for Nox rather
+    # than the product identity. Some execution modes (cron) still want the
+    # profile while keeping cwd project instructions disabled.
+    _soul_seen = False
     if agent.load_soul_identity or not agent.skip_context_files:
         _soul_content = _r.load_soul_md(_ctx_len)
         if _soul_content:
-            stable_parts.append(_soul_content)
-            _soul_loaded = True
-
-    if not _soul_loaded:
-        # Fallback to hardcoded identity
-        stable_parts.append(DEFAULT_AGENT_IDENTITY)
+            _soul_seen = True
+            _profile_block = profile_soul_block(_soul_content)
+            if _profile_block:
+                stable_parts.append(_profile_block)
 
     # Pointer to the hermes-agent skill + docs for user questions about Hermes itself.
     stable_parts.append(HERMES_AGENT_HELP_GUIDANCE)
@@ -449,7 +448,7 @@ def build_system_prompt_parts(agent: Any, system_message: Optional[str] = None) 
         # dir — the user's real cwd there, but the install dir for the gateway
         # daemon, which is why the gateway sets TERMINAL_CWD.
         context_files_prompt = _r.build_context_files_prompt(
-            cwd=resolve_context_cwd(), skip_soul=_soul_loaded,
+            cwd=resolve_context_cwd(), skip_soul=_soul_seen,
             context_length=_ctx_len)
         if context_files_prompt:
             context_parts.append(context_files_prompt)

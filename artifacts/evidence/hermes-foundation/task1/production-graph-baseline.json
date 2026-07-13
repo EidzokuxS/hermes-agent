@@ -12,9 +12,9 @@
     "python_cli": "hermes_cli.main:main"
   },
   "desktop_import_graph": {
-    "node_count": 581,
-    "edge_count": 2704,
-    "graph_sha256": "4f2d743a260cc78e2b21b8e2f00ecf664ec05a958144fe09477ced50a75ba73b",
+    "node_count": 583,
+    "edge_count": 2705,
+    "graph_sha256": "0936915e8058a7ac29f0b974e23299976292dceb3bfc9abe134279c8525a86f0",
     "nodes": [
       "apps/desktop/electron/backend-command.ts",
       "apps/desktop/electron/backend-env.ts",
@@ -37,6 +37,8 @@
       "apps/desktop/electron/main.ts",
       "apps/desktop/electron/oauth-net-request.ts",
       "apps/desktop/electron/preload.ts",
+      "apps/desktop/electron/product-data.ts",
+      "apps/desktop/electron/product.ts",
       "apps/desktop/electron/session-windows.ts",
       "apps/desktop/electron/titlebar-overlay-width.ts",
       "apps/desktop/electron/update-count.ts",
@@ -46,7 +48,6 @@
       "apps/desktop/electron/update-remote.ts",
       "apps/desktop/electron/vscode-marketplace.ts",
       "apps/desktop/electron/window-state.ts",
-      "apps/desktop/electron/windows-user-env.ts",
       "apps/desktop/electron/workspace-cwd.ts",
       "apps/desktop/electron/wsl-clipboard-image.ts",
       "apps/desktop/electron/zoom.ts",
@@ -527,6 +528,7 @@
       "apps/desktop/src/lib/voice-playback.ts",
       "apps/desktop/src/lib/yolo-session.ts",
       "apps/desktop/src/main.tsx",
+      "apps/desktop/src/product.ts",
       "apps/desktop/src/store/activity.ts",
       "apps/desktop/src/store/background-delegation.ts",
       "apps/desktop/src/store/boot.ts",
@@ -623,6 +625,8 @@
       "apps/desktop/electron/main.ts -> apps/desktop/electron/hardening.ts",
       "apps/desktop/electron/main.ts -> apps/desktop/electron/link-title-window.ts",
       "apps/desktop/electron/main.ts -> apps/desktop/electron/oauth-net-request.ts",
+      "apps/desktop/electron/main.ts -> apps/desktop/electron/product-data.ts",
+      "apps/desktop/electron/main.ts -> apps/desktop/electron/product.ts",
       "apps/desktop/electron/main.ts -> apps/desktop/electron/session-windows.ts",
       "apps/desktop/electron/main.ts -> apps/desktop/electron/titlebar-overlay-width.ts",
       "apps/desktop/electron/main.ts -> apps/desktop/electron/update-count.ts",
@@ -632,7 +636,6 @@
       "apps/desktop/electron/main.ts -> apps/desktop/electron/update-remote.ts",
       "apps/desktop/electron/main.ts -> apps/desktop/electron/vscode-marketplace.ts",
       "apps/desktop/electron/main.ts -> apps/desktop/electron/window-state.ts",
-      "apps/desktop/electron/main.ts -> apps/desktop/electron/windows-user-env.ts",
       "apps/desktop/electron/main.ts -> apps/desktop/electron/workspace-cwd.ts",
       "apps/desktop/electron/main.ts -> apps/desktop/electron/wsl-clipboard-image.ts",
       "apps/desktop/electron/main.ts -> apps/desktop/electron/zoom.ts",
@@ -1826,7 +1829,6 @@
       "apps/desktop/src/app/session/hooks/use-cwd-actions.ts -> apps/desktop/src/store/session.ts",
       "apps/desktop/src/app/session/hooks/use-cwd-actions.ts -> apps/desktop/src/types/hermes.ts",
       "apps/desktop/src/app/session/hooks/use-hermes-config.ts -> apps/desktop/src/hermes.ts",
-      "apps/desktop/src/app/session/hooks/use-hermes-config.ts -> apps/desktop/src/lib/chat-runtime.ts",
       "apps/desktop/src/app/session/hooks/use-hermes-config.ts -> apps/desktop/src/lib/text.ts",
       "apps/desktop/src/app/session/hooks/use-hermes-config.ts -> apps/desktop/src/store/session.ts",
       "apps/desktop/src/app/session/hooks/use-hermes-config.ts -> apps/desktop/src/store/voice-prefs.ts",
@@ -2750,7 +2752,8 @@
       "apps/desktop/src/components/chat/generated-image-result.tsx -> apps/desktop/src/lib/utils.ts",
       "apps/desktop/src/components/chat/image-generation-placeholder.tsx -> apps/desktop/src/hooks/use-resize-observer.ts",
       "apps/desktop/src/components/chat/image-generation-placeholder.tsx -> apps/desktop/src/hooks/use-theme-epoch.ts",
-      "apps/desktop/src/components/chat/intro.tsx -> apps/desktop/src/lib/text.ts",
+      "apps/desktop/src/components/chat/intro.tsx -> apps/desktop/src/i18n/index.ts",
+      "apps/desktop/src/components/chat/intro.tsx -> apps/desktop/src/product.ts",
       "apps/desktop/src/components/chat/json-document-editor.tsx -> apps/desktop/src/components/chat/code-editor.tsx",
       "apps/desktop/src/components/chat/json-document-editor.tsx -> apps/desktop/src/components/ui/button.tsx",
       "apps/desktop/src/components/chat/json-document-editor.tsx -> apps/desktop/src/components/ui/codicon.tsx",
@@ -3339,12 +3342,31 @@
       "packages/testkit"
     ]
   },
+  "python_nox_imports": {
+    "agent/conversation_compression.py": [
+      "nox.identity"
+    ],
+    "agent/conversation_loop.py": [
+      "nox.identity"
+    ],
+    "agent/system_prompt.py": [
+      "nox.identity"
+    ],
+    "run_agent.py": [
+      "nox.identity"
+    ],
+    "tui_gateway/server.py": [
+      "nox.causal_bridge",
+      "nox.identity"
+    ]
+  },
   "invariants": {
     "desktop_count": 1,
     "model_tool_loop_count": 1,
     "old_node_runtime_spawned": false,
     "shadow_cortex_reachable": false,
     "testkit_reachable": false,
-    "closed_paths_referenced": false
+    "closed_paths_referenced": false,
+    "causal_bridge_reachable": true
   }
 }

@@ -9,23 +9,6 @@ import type { ComposerAttachment } from '@/store/composer'
 import type { ModelOptionsResponse, SessionInfo } from '@/types/hermes'
 
 export const SLASH_COMMAND_RE = /^\/[^\s/]*(?:\s|$)/
-export const BUILTIN_PERSONALITIES = [
-  'helpful',
-  'concise',
-  'technical',
-  'creative',
-  'teacher',
-  'kawaii',
-  'catgirl',
-  'pirate',
-  'shakespeare',
-  'surfer',
-  'noir',
-  'uwu',
-  'philosopher',
-  'hype'
-]
-
 const THINKING_STATUS_PREFIX_RE =
   /^\s*(?:(?:[^\s.]{1,16})\s+)?(?:processing|thinking|reasoning|analyzing|pondering|contemplating|musing|cogitating|ruminating|deliberating|mulling|reflecting|computing|synthesizing|formulating|brainstorming)\.\.\.\s*/i
 
@@ -120,7 +103,7 @@ export function coerceGatewayText(value: unknown): string {
 /**
  * Normalize a reasoning/thinking text payload from the gateway.
  *
- * Only the leading status prefix (e.g. "Hermes is thinking...") and the
+ * Only the leading status prefix (e.g. "Nox is thinking...") and the
  * obvious placeholder echoes are stripped. We deliberately do NOT trim
  * the delta — reasoning streams as small chunks (often individual tokens
  * with leading or trailing spaces), and trimming each chunk before
@@ -205,16 +188,6 @@ export function optimisticAttachmentRef(attachment: ComposerAttachment): string 
   }
 
   return attachmentDisplayText(attachment)
-}
-
-export function personalityNamesFromConfig(config: unknown): string[] {
-  const root = config && typeof config === 'object' ? (config as Record<string, unknown>) : {}
-  const agent = root.agent && typeof root.agent === 'object' ? (root.agent as Record<string, unknown>) : {}
-  const personalities = agent.personalities
-
-  return personalities && typeof personalities === 'object' && !Array.isArray(personalities)
-    ? Object.keys(personalities as Record<string, unknown>)
-    : []
 }
 
 export function normalizePersonalityValue(value: string): string {

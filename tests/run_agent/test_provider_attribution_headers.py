@@ -160,6 +160,27 @@ def test_gmi_base_url_picks_up_profile_user_agent(mock_openai):
 
 
 @patch("run_agent.OpenAI")
+def test_zai_coding_base_url_picks_up_claude_code_user_agent(mock_openai):
+    mock_openai.return_value = MagicMock()
+    agent = AIAgent(
+        api_key="test-key",
+        base_url="https://api.z.ai/api/coding/paas/v4",
+        model="glm-5.2",
+        provider="zai",
+        quiet_mode=True,
+        skip_context_files=True,
+        skip_memory=True,
+    )
+
+    agent._apply_client_headers_for_base_url(
+        "https://api.z.ai/api/coding/paas/v4"
+    )
+
+    headers = agent._client_kwargs["default_headers"]
+    assert headers["User-Agent"] == "claude-cli/2.1.207 (external, sdk-cli)"
+
+
+@patch("run_agent.OpenAI")
 def test_unknown_base_url_clears_default_headers(mock_openai):
     mock_openai.return_value = MagicMock()
     agent = AIAgent(

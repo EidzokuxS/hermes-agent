@@ -122,11 +122,7 @@ function ConfigField({
         <SelectContent>
           {selectOptions.map(option => (
             <SelectItem key={option || EMPTY_SELECT_VALUE} value={option || EMPTY_SELECT_VALUE}>
-              {option
-                ? (optionLabels?.[option] ?? prettyName(option))
-                : schemaKey === 'display.personality'
-                  ? c.none
-                  : c.noneParen}
+              {option ? (optionLabels?.[option] ?? prettyName(option)) : c.noneParen}
             </SelectItem>
           ))}
         </SelectContent>

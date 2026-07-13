@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import re
@@ -63,6 +64,9 @@ FORBIDDEN_PRODUCTION_MARKERS = (
     "REFERENCE ONLY",
 )
 CODE_SUFFIXES = (".d.ts", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
+PYTHON_PRODUCTION_ROOTS = ("agent", "gateway", "hermes_cli", "tui_gateway")
+PYTHON_PRODUCTION_FILES = ("hermes_state.py", "run_agent.py")
+ALLOWED_PRODUCTION_NOX_MODULES = frozenset({"nox.causal_bridge", "nox.identity"})
 IMPORT_PATTERNS = (
     re.compile(r"\bfrom\s+['\"]([^'\"]+)['\"]"),
     re.compile(r"\b(?:import|require)\s*\(\s*['\"]([^'\"]+)['\"]\s*\)"),
@@ -119,6 +123,44 @@ def _resolve_code_import(importer: Path, specifier: str) -> Path | None:
 def _production_violations(source: str) -> list[str]:
     normalized = source.replace("\\", "/")
     return [marker for marker in FORBIDDEN_PRODUCTION_MARKERS if marker in normalized]
+
+
+def _extract_python_nox_modules(source: str, *, filename: str = "<fixture>") -> set[str]:
+    tree = ast.parse(source, filename=filename)
+    modules: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules.update(
+                alias.name
+                for alias in node.names
+                if alias.name == "nox" or alias.name.startswith("nox.")
+            )
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            if node.module == "nox" or node.module.startswith("nox."):
+                modules.add(node.module)
+    return modules
+
+
+def _python_nox_imports() -> dict[str, list[str]]:
+    """Return Nox imports reachable from the Hermes Python product surface."""
+    sources = [REPO_ROOT / path for path in PYTHON_PRODUCTION_FILES]
+    for root in PYTHON_PRODUCTION_ROOTS:
+        sources.extend((REPO_ROOT / root).rglob("*.py"))
+
+    imports: dict[str, list[str]] = {}
+    for path in sorted(sources):
+        modules = _extract_python_nox_modules(
+            path.read_text(encoding="utf-8"), filename=str(path)
+        )
+        if modules:
+            imports[_relative(path)] = sorted(modules)
+
+    imported_modules = {module for modules in imports.values() for module in modules}
+    assert imported_modules == ALLOWED_PRODUCTION_NOX_MODULES, (
+        "Only the accepted identity and observational causal seams may be reachable; "
+        f"found Nox imports: {imports}"
+    )
+    return imports
 
 
 def _walk_desktop_graph() -> tuple[list[str], list[str]]:
@@ -239,6 +281,7 @@ def build_production_graph_baseline() -> dict[str, Any]:
         },
         "backend_process": _assert_backend_contract(),
         "workspace_fence": _assert_workspace_contract(),
+        "python_nox_imports": _python_nox_imports(),
         "invariants": {
             "desktop_count": 1,
             "model_tool_loop_count": 1,
@@ -246,6 +289,7 @@ def build_production_graph_baseline() -> dict[str, Any]:
             "shadow_cortex_reachable": False,
             "testkit_reachable": False,
             "closed_paths_referenced": False,
+            "causal_bridge_reachable": True,
         },
     }
 
@@ -273,6 +317,20 @@ def test_forbidden_route_fixtures_fail(source: str, expected_marker: str) -> Non
 def test_canonical_hermes_route_fixture_passes() -> None:
     source = "spawn(backend.command, ['-m', 'hermes_cli.main', 'serve'])"
     assert _production_violations(source) == []
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        "import nox.runtime",
+        "from nox.causal_bridge.bridge import CausalBridge",
+        "from nox.causal_bridge.sqlite_sink import SqliteCausalSink",
+    ),
+)
+def test_unapproved_python_nox_route_fixture_fails(source: str) -> None:
+    assert not _extract_python_nox_modules(source).issubset(
+        ALLOWED_PRODUCTION_NOX_MODULES
+    )
 
 
 if __name__ == "__main__":

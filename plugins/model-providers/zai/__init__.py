@@ -121,6 +121,9 @@ zai = ZaiProfile(
         "glm-4-9b",
     ),
     base_url="https://api.z.ai/api/paas/v4",
+    # Match the current Claude Code client fingerprint requested for Coding Plan.
+    # The gateway reports compatibility rejections as the generic 429 / code 1305.
+    default_headers={"User-Agent": "claude-cli/2.1.207 (external, sdk-cli)"},
     default_aux_model="glm-4.5-flash",
 )
 

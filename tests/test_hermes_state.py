@@ -230,10 +230,19 @@ class TestSessionLifecycle:
 
     def test_update_system_prompt(self, db):
         db.create_session(session_id="s1", source="cli")
-        db.update_system_prompt("s1", "You are a helpful assistant.")
+        db.update_system_prompt(
+            "s1",
+            "# Nox\n\nSession prompt.",
+            nox_identity_revision="a" * 64,
+            nox_identity_chars=5,
+            nox_identity_prompt_sha256="b" * 64,
+        )
 
         session = db.get_session("s1")
-        assert session["system_prompt"] == "You are a helpful assistant."
+        assert session["system_prompt"] == "# Nox\n\nSession prompt."
+        assert session["nox_identity_revision"] == "a" * 64
+        assert session["nox_identity_chars"] == 5
+        assert session["nox_identity_prompt_sha256"] == "b" * 64
 
     def test_update_token_counts(self, db):
         db.create_session(session_id="s1", source="cli")
@@ -347,8 +356,9 @@ class TestSessionLifecycle:
         COALESCE(billing_provider, ?) (first-writer-wins), so after a
         provider switch the dashboard kept attributing cost to the original
         provider (#48248). update_session_billing_route sets them
-        unconditionally and nulls system_prompt so the next turn rebuilds
-        the Model:/Provider: header (#48173).
+        unconditionally. The prompt snapshot remains available so the next
+        turn can rebuild stale Model:/Provider: metadata while preserving its
+        session-bound Nox identity.
         """
         db.create_session(session_id="s1", source="telegram")
         # First token update seeds the billing route.
@@ -376,8 +386,7 @@ class TestSessionLifecycle:
         assert sess["billing_provider"] == "ollama"
         assert sess["billing_base_url"] == "http://localhost:11434/v1"
         assert sess["billing_mode"] == "local"
-        assert sess["system_prompt"] is None, \
-            "system_prompt must be nulled so the next turn rebuilds Model:/Provider:"
+        assert sess["system_prompt"] == "Model: x/old\nProvider: openrouter"
 
         # billing_mode defaults to COALESCE — omitting it preserves the value.
         db.update_session_billing_route(

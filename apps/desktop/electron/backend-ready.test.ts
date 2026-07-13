@@ -19,8 +19,11 @@ import path from 'node:path'
 import test from 'node:test'
 
 import {
+  BACKEND_HEALTH_PATH,
   DEFAULT_PORT_ANNOUNCE_TIMEOUT_MS,
+  LEGACY_BACKEND_HEALTH_PATH,
   MIN_PORT_ANNOUNCE_TIMEOUT_MS,
+  probeBackendReadiness,
   readDashboardReadyFile,
   resolvePortAnnounceTimeoutMs,
   waitForDashboardPort,
@@ -41,6 +44,59 @@ function makeFakeChild(): FakeChildProcess {
 
   return child
 }
+
+// ---------------------------------------------------------------------------
+// backend HTTP readiness
+// ---------------------------------------------------------------------------
+
+test('probes the cheap health endpoint without loading full backend status', async () => {
+  const calls: string[] = []
+
+  const fetchJson = async (url: string) => {
+    calls.push(url)
+
+    return { ready: true }
+  }
+
+  assert.deepEqual(await probeBackendReadiness(fetchJson, 'http://127.0.0.1:4321', 'token'), {
+    ready: true
+  })
+  assert.deepEqual(calls, [`http://127.0.0.1:4321${BACKEND_HEALTH_PATH}`])
+})
+
+test('falls back to status when an older backend has no health endpoint', async () => {
+  const calls: string[] = []
+
+  const fetchJson = async (url: string) => {
+    calls.push(url)
+
+    if (url.endsWith(BACKEND_HEALTH_PATH)) {
+      throw new Error('404: endpoint not found')
+    }
+
+    return { version: 'legacy' }
+  }
+
+  assert.deepEqual(await probeBackendReadiness(fetchJson, 'http://127.0.0.1:4321', 'token'), {
+    version: 'legacy'
+  })
+  assert.deepEqual(calls, [
+    `http://127.0.0.1:4321${BACKEND_HEALTH_PATH}`,
+    `http://127.0.0.1:4321${LEGACY_BACKEND_HEALTH_PATH}`
+  ])
+})
+
+test('does not hide a real health probe failure behind the legacy status endpoint', async () => {
+  const calls: string[] = []
+
+  const fetchJson = async (url: string) => {
+    calls.push(url)
+    throw new Error('Timed out connecting to Hermes backend after 15000ms')
+  }
+
+  await assert.rejects(probeBackendReadiness(fetchJson, 'http://127.0.0.1:4321', 'token'), /Timed out connecting/)
+  assert.deepEqual(calls, [`http://127.0.0.1:4321${BACKEND_HEALTH_PATH}`])
+})
 
 // ---------------------------------------------------------------------------
 // resolvePortAnnounceTimeoutMs
@@ -124,7 +180,7 @@ test('rejects with the timeout message after the deadline', async () => {
   const child = makeFakeChild()
   await assert.rejects(
     waitForDashboardPort(child, 20),
-    /Timed out waiting for Hermes backend port announcement \(20ms\)/
+    /Timed out waiting for Nox backend port announcement \(20ms\)/
   )
 })
 

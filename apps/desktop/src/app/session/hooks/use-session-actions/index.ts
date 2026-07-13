@@ -29,7 +29,6 @@ import {
   setCurrentServiceTier,
   setCurrentUsage,
   setFreshDraftReady,
-  setIntroSeed,
   setMessages,
   setResumeExhaustedSessionId,
   setResumeFailedSessionId,
@@ -110,7 +109,6 @@ export function useSessionActions({
       setBusy(false)
       setAwaitingResponse(false)
       clearNotifications()
-      setIntroSeed(seed => seed + 1)
       navigate(NEW_CHAT_ROUTE, { replace: replaceRoute })
       setActiveSessionId(null)
       activeSessionIdRef.current = null

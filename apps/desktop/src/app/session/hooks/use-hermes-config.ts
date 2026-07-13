@@ -1,17 +1,13 @@
 import { type MutableRefObject, useCallback, useState } from 'react'
 
-import { getHermesConfig, getHermesConfigDefaults } from '@/hermes'
-import { BUILTIN_PERSONALITIES, normalizePersonalityValue, personalityNamesFromConfig } from '@/lib/chat-runtime'
+import { getHermesConfig } from '@/hermes'
 import { normalize } from '@/lib/text'
 import {
   $currentCwd,
-  setAvailablePersonalities,
   setCurrentCwd,
   setCurrentFastMode,
-  setCurrentPersonality,
   setCurrentReasoningEffort,
-  setCurrentServiceTier,
-  setIntroPersonality
+  setCurrentServiceTier
 } from '@/store/session'
 import { applyAutoSpeakFromConfig } from '@/store/voice-prefs'
 
@@ -50,23 +46,7 @@ export function useHermesConfig({ activeSessionIdRef, refreshProjectBranch }: He
 
   const refreshHermesConfig = useCallback(async () => {
     try {
-      const [config, defaults] = await Promise.all([getHermesConfig(), getHermesConfigDefaults().catch(() => ({}))])
-
-      const personality = normalizePersonalityValue(
-        typeof config.display?.personality === 'string' ? config.display.personality : ''
-      )
-
-      setIntroPersonality(personality)
-      // Active sessions keep their per-session value; standalone falls back to config.
-      setCurrentPersonality(prev => (activeSessionIdRef.current ? prev || personality : personality))
-      setAvailablePersonalities([
-        ...new Set([
-          'none',
-          ...BUILTIN_PERSONALITIES,
-          ...personalityNamesFromConfig(defaults),
-          ...personalityNamesFromConfig(config)
-        ])
-      ])
+      const config = await getHermesConfig()
 
       const cwd = (config.terminal?.cwd ?? '').trim()
 

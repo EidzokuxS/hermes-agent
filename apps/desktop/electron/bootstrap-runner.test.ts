@@ -5,9 +5,9 @@ import path from 'node:path'
 import test from 'node:test'
 
 import {
-  buildPowerShellSpawnEnv,
   buildPinArgs,
   buildPosixPinArgs,
+  buildPowerShellSpawnEnv,
   cachedScriptPath,
   hasExistingGitCheckout,
   installedAgentInstallScript,

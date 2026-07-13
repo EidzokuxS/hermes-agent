@@ -12,8 +12,8 @@ Three scenarios are covered:
    blocked, HERMES_DASHBOARD_READY would fire immediately).
 
 2. get_status run_in_executor: patched _resolve_restart_drain_timeout sleeps N
-   seconds in a thread; a concurrent fast endpoint (/api/version) must respond
-   during the wait, proving the event loop stayed free.
+   seconds in a thread; the dedicated /api/health readiness endpoint must
+   respond during the wait, proving Desktop does not gate startup on status.
 
 3. No orphan accumulation: three concurrent /api/status requests all receive a
    200 response — no socket timeouts, no connection resets.
@@ -87,9 +87,9 @@ def test_lifespan_warmup_is_nonblocking():
 def test_get_status_does_not_block_event_loop():
     """
     /api/status calls _resolve_restart_drain_timeout via run_in_executor.
-    While that slow call is running in a thread, a concurrent fast request
-    (/api/version) must still get a response — proving the event loop stayed
-    free during the import.
+    While that slow call is running in a thread, the dedicated readiness
+    endpoint (/api/health) must still get a response — proving the event loop
+    stayed free during the import and Desktop has a safe handshake target.
     """
     import httpx
     from anyio import from_thread, to_thread
@@ -110,34 +110,37 @@ def test_get_status_does_not_block_event_loop():
                     results["status_ms"] = (time.perf_counter() - t) * 1000
                     results["status_code"] = r.status_code
 
-                async def _version():
+                async def _health():
                     # Small delay so /api/status starts first
                     await asyncio.sleep(0.1)
                     t = time.perf_counter()
-                    r = await client.get("/api/version", timeout=5)
-                    results["version_ms"] = (time.perf_counter() - t) * 1000
-                    results["version_code"] = r.status_code
+                    r = await client.get("/api/health", timeout=5)
+                    results["health_ms"] = (time.perf_counter() - t) * 1000
+                    results["health_code"] = r.status_code
+                    results["health_ready"] = r.json().get("ready")
 
                 tg.create_task(_status())
-                tg.create_task(_version())
+                tg.create_task(_health())
 
     with patch.object(
         web_server_mod, "_resolve_restart_drain_timeout", _make_slow_drain(SLOW_SECONDS)
     ):
         asyncio.run(_run())
 
-    # /api/version must have responded well before /api/status finished
-    assert "version_ms" in results, "Fast endpoint never responded"
+    # /api/health must have responded well before /api/status finished
+    assert "health_ms" in results, "Readiness endpoint never responded"
     assert "status_ms" in results, "/api/status never responded"
 
-    version_ms = results["version_ms"]
+    health_ms = results["health_ms"]
     status_ms = results["status_ms"]
 
-    # /api/version should respond in < SLOW_SECONDS (event loop free)
-    assert version_ms < SLOW_SECONDS * 1000, (
-        f"/api/version took {version_ms:.0f} ms — event loop was blocked by "
+    # /api/health should respond in < SLOW_SECONDS (event loop free)
+    assert health_ms < SLOW_SECONDS * 1000, (
+        f"/api/health took {health_ms:.0f} ms — event loop was blocked by "
         f"/api/status (which waited {status_ms:.0f} ms for the slow import)."
     )
+    assert results.get("health_code") == 200
+    assert results.get("health_ready") is True
 
     # /api/status itself eventually returns 200
     assert results.get("status_code") == 200, (

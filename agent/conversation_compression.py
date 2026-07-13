@@ -719,9 +719,21 @@ def compress_context(
             compressed.append({"role": "user", "content": todo_snapshot})
         _ensure_compressed_has_user_turn(messages, compressed)
 
-        agent._invalidate_system_prompt()
-        new_system_prompt = agent._build_system_prompt(system_message)
-        agent._cached_system_prompt = new_system_prompt
+        if getattr(agent, "_preserve_system_prompt_snapshot", False):
+            # A pre-Nox session has no identity metadata to reconstruct. Its
+            # persisted prompt remains authoritative until an explicit session
+            # migration exists; compression must not silently change identity.
+            new_system_prompt = agent._cached_system_prompt or ""
+        else:
+            # Nox sessions rebuild dynamic/context tiers while
+            # bound_nox_identity() keeps the exact session revision pinned.
+            agent._invalidate_system_prompt()
+            new_system_prompt = agent._build_system_prompt(system_message)
+            agent._cached_system_prompt = new_system_prompt
+
+        from nox.identity import identity_persistence_fields
+
+        identity_fields = identity_persistence_fields(agent)
 
         if agent._session_db:
             try:
@@ -806,6 +818,8 @@ def compress_context(
                             model=agent.model,
                             model_config=agent._session_init_model_config,
                             parent_session_id=old_session_id,
+                            system_prompt=new_system_prompt,
+                            **identity_fields,
                         )
                     except Exception as _cs_err:
                         # The child row could not be created (e.g. FK constraint,
@@ -867,7 +881,11 @@ def compress_context(
                 # in-place keeps and rotation has already reassigned to the new id):
                 # refresh the stored system prompt and reset the flush cursor so the
                 # next turn re-bases its append diff.
-                agent._session_db.update_system_prompt(agent.session_id, new_system_prompt)
+                agent._session_db.update_system_prompt(
+                    agent.session_id,
+                    new_system_prompt,
+                    **identity_fields,
+                )
                 agent._last_flushed_db_idx = 0
             except Exception as e:
                 # If the rotation rolled back to the parent (orphan-avoidance

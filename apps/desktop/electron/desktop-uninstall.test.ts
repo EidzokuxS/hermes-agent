@@ -60,8 +60,8 @@ test('resolveRemovableAppPath finds the .app bundle on macOS', () => {
     '/Applications/Hermes.app'
   )
   assert.equal(
-    resolveRemovableAppPath('/Users/x/Applications/Hermes.app/Contents/MacOS/Hermes', 'darwin'),
-    '/Users/x/Applications/Hermes.app'
+    resolveRemovableAppPath('/Users/x/Applications/Nox.app/Contents/MacOS/Nox', 'darwin'),
+    '/Users/x/Applications/Nox.app'
   )
 })
 
@@ -80,12 +80,8 @@ test('resolveRemovableAppPath: dev-run .app resolves (safety is shouldRemoveAppB
 
 test('resolveRemovableAppPath finds the install dir on Windows', () => {
   assert.equal(
-    resolveRemovableAppPath('C:\\Users\\x\\AppData\\Local\\Programs\\Hermes\\Hermes.exe', 'win32'),
-    'C:\\Users\\x\\AppData\\Local\\Programs\\Hermes'
-  )
-  assert.equal(
-    resolveRemovableAppPath('C:\\Users\\x\\AppData\\Local\\hermes-desktop\\Hermes.exe', 'win32'),
-    'C:\\Users\\x\\AppData\\Local\\hermes-desktop'
+    resolveRemovableAppPath('C:\\Users\\x\\AppData\\Local\\Programs\\Nox\\Nox.exe', 'win32'),
+    'C:\\Users\\x\\AppData\\Local\\Programs\\Nox'
   )
 })
 

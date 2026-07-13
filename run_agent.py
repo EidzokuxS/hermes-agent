@@ -597,6 +597,9 @@ class AIAgent:
             return
         source = _session_source_for_agent(self.platform)
         try:
+            from nox.identity import identity_persistence_fields
+
+            identity_fields = identity_persistence_fields(self)
             self._session_db.create_session(
                 session_id=self.session_id,
                 source=source,
@@ -606,6 +609,7 @@ class AIAgent:
                 user_id=None,
                 parent_session_id=self._parent_session_id,
                 cwd=_launch_cwd_for_session(source),
+                **identity_fields,
             )
             self._session_db_created = True
         except Exception as e:

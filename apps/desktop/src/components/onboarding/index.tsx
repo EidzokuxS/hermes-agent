@@ -261,9 +261,12 @@ export function DesktopOnboardingOverlay({ enabled, onCompleted, requestGateway 
   // suppress the generic defaults (useless noise) and provider-setup errors
   // (those are surfaced by FlowPanel, not as a banner).
   const rawReason = onboarding.reason?.trim() || null
+  const providerCheckUnavailable = rawReason?.startsWith('request timed out: setup.runtime_check') ?? false
 
   const reason =
-    rawReason &&
+    providerCheckUnavailable
+      ? t.onboarding.providerCheckUnavailable
+      : rawReason &&
     !isProviderSetupErrorMessage(rawReason) &&
     rawReason !== DEFAULT_ONBOARDING_REASON &&
     rawReason !== DEFAULT_MANUAL_ONBOARDING_REASON

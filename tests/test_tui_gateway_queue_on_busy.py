@@ -17,6 +17,7 @@ from tui_gateway import server
 
 def _session(agent=None, **extra):
     return {
+        "_nox_causal_bridge": None,
         "agent": agent if agent is not None else types.SimpleNamespace(),
         "session_key": "session-key",
         "history": [],
@@ -34,7 +35,11 @@ def _session(agent=None, **extra):
 def test_enqueue_pins_text_and_transport():
     session = _session()
     server._enqueue_prompt(session, "hello", "ws-1")
-    assert session["queued_prompt"] == {"text": "hello", "transport": "ws-1"}
+    assert session["queued_prompt"] == {
+        "nox_correlations": [],
+        "text": "hello",
+        "transport": "ws-1",
+    }
 
 
 def test_enqueue_merges_second_arrival_losslessly():
@@ -102,7 +107,9 @@ def test_drain_fires_queued_prompt_and_claims_running(monkeypatch):
     fired = {}
     monkeypatch.setattr(
         server, "_run_prompt_submit",
-        lambda rid, sid, session, text: fired.update(rid=rid, sid=sid, text=text),
+        lambda rid, sid, session, text, **_kwargs: fired.update(
+            rid=rid, sid=sid, text=text
+        ),
     )
     session = _session(queued_prompt={"text": "go", "transport": "ws-9"})
 

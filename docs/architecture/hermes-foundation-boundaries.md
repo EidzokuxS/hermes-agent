@@ -15,11 +15,11 @@ apps/desktop renderer
   -> Hermes session + model/tool loop
   -> Hermes state.db
 
-future bounded observation only:
-Hermes outcome -> Nox causal bridge -> Nox Journal / constitutional State
+bounded observation only:
+Hermes lifecycle -> Nox causal bridge -> append-only Nox observation Journal
 ```
 
-The future causal bridge points away from Hermes operational truth. It may observe and correlate an outcome; it may not become a second chat route, model loop, transcript, or authority over a Hermes tool result.
+The causal bridge points away from Hermes operational truth. It observes and correlates lifecycle facts; it is not a second chat route, model loop, transcript, constitutional reducer, or authority over a Hermes tool result.
 
 ## Production entrypoints
 
@@ -39,9 +39,9 @@ The canonical local process arguments are `hermes serve --host 127.0.0.1 --port 
 | Fact | Durable authority | Allowed projections / observers | Forbidden duplicate authority |
 | --- | --- | --- | --- |
 | Sessions, messages, model configuration, model calls, tool calls and tool results | Hermes `${HERMES_HOME}/state.db` | Desktop stores, transcript UI, logs, export/evidence readers | Nox Journal, renderer-local persistence, old Node runtime |
-| Active profile, Hermes behavior and credentials | Hermes profile `config.yaml` and `.env` under `HERMES_HOME` | Desktop settings and status views | Nox mask, Journal, hidden renderer config |
-| Canonical Nox identity | Future accepted `identity/NOX-MASK.md` revision in a stable prompt tier | Profile `SOUL.md`, memory and project context are additive | Renderer persona text, ad-hoc per-turn injection, unaccepted drafts |
-| Nox causal provenance | Future Nox Journal | Independent audit and evidence readers | Hermes transcript rewritten as if Journal-authored |
+| Active profile, Hermes behavior and credentials | Hermes profile `config.yaml` and `.env` under `HERMES_HOME` | Desktop settings and status views | Nox identity, Journal, hidden renderer config |
+| Nox | Accepted `identity/NOX.md` revision in a stable session-bound prompt tier | Profile `SOUL.md`, memory and project context are additive | Renderer-authored identity text, ad-hoc per-turn injection, unaccepted drafts |
+| Nox causal provenance | `${HERMES_HOME}/nox/journal.sqlite3` | Independent audit and evidence readers | Hermes transcript rewritten as if Journal-authored |
 | Nox constitutional State | Future Nox Journal snapshots/reducer contract | Read-only audit and UI projections | Hermes operational session tables or a second cortex |
 | Desktop view state | Renderer stores and Electron window/config files | Rebuildable UI state | Operational or causal source of truth |
 
@@ -54,7 +54,7 @@ The canonical local process arguments are `hermes serve --host 127.0.0.1 --port 
 - `${HERMES_HOME}/config.yaml`, `${HERMES_HOME}/.env`, profiles, skills, memory, sessions, logs, and managed install files retain their Hermes meanings.
 - Electron user-data owns window state and Desktop connection/update preferences only.
 - The retained `apps/runtime` currently accepts a separate data directory and would create `nox.sqlite`; production Desktop does not launch it and production workspaces do not install it.
-- A production Nox Journal location is intentionally undefined until Task 4 assigns the observational seam. Choosing a path early would falsely imply a running causal owner.
+- `${HERMES_HOME}/nox/journal.sqlite3` is the append-only observational Journal. It stores lifecycle identifiers, hashes, provenance, model and accepted identity references; it stores no transcript body, prompt, response, reasoning, tool payload, credential or attachment path by default.
 - Branding and production data-path renames remain deferred until identity and causal seams pass their gates.
 
 ## Mechanical fence
@@ -65,9 +65,10 @@ The canonical local process arguments are `hermes serve --host 127.0.0.1 --port 
 - reachable Desktop source contains no displaced runtime, shadow cortex, testkit, or closed-path reference;
 - Electron launches the Hermes `serve` backend through the installed CLI or `hermes_cli.main`;
 - Python registers `serve` on the Hermes headless backend;
+- Python production imports exactly the public `nox.identity` and `nox.causal_bridge` seams; deep bridge imports and any other Nox runtime route fail the fence;
 - checked-in evidence matches the current source graph.
 
-Negative fixtures prove the fence rejects a custom Node runtime spawn, a shadow cortex import, a testkit import, an old runtime deep import, and a closed-path import. The deterministic acceptance artifact is `artifacts/evidence/hermes-foundation/task1/production-graph-baseline.json`.
+Negative fixtures prove the fence rejects a custom Node runtime spawn, a shadow cortex import, a testkit import, an old runtime deep import, a closed-path import, an unapproved Nox Python module and deep causal-bridge imports. The deterministic acceptance artifact is `artifacts/evidence/hermes-foundation/task1/production-graph-baseline.json`.
 
 ## Validation commands
 
@@ -85,4 +86,4 @@ Refresh the graph evidence only after an accepted production-boundary change:
 & .\.venv\Scripts\python.exe tests\nox\test_production_graph.py --write-baseline
 ```
 
-Task 1 does not integrate identity, create a Journal bridge, rename the product, change production data paths, or delete retained sources. Those actions remain gated by later tasks and their evidence.
+Tasks 2–4 add only the accepted identity seam and observational Journal described above. Product renaming, broader data-path changes and retained-source deletion remain gated by later tasks and their evidence.

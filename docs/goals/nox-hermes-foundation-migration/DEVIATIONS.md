@@ -81,3 +81,32 @@
 - **Decision:** When Desktop spawns `powershell.exe`, omit every case variant of `PSModulePath` and let Windows PowerShell construct its own defaults; retain the variable for `pwsh.exe`. Keep Astral's documented `UV_INSTALL_DIR`, add `UV_NO_MODIFY_PATH=1`, preserve the last installer diagnostics, and retry once when the child returns without the expected executable. The operation remains bounded to two attempts and still fails visibly if neither produces `uv.exe`.
 - **Why this preserves intent:** First-run Desktop bootstrap now uses the correct PowerShell module generation and is resilient to one genuine transient miss without probing arbitrary host uv locations, modifying shell profiles or hiding a persistent failure.
 - **Rollback:** Remove the environment isolation only if the Desktop no longer launches Windows PowerShell from a potentially PS7-derived environment; remove the retry only if uv ships locally or another bounded verified bootstrap replaces it.
+
+## D-010 — Nox is named directly
+
+- **Recorded:** 2026-07-13
+- **Plan location:** Task 2 identity artifact, Task 3 integration seam, evidence names and acceptance language.
+- **Evidence:** Эйдзи explicitly rejected wrapper metaphors and other meta-symbolic names for Nox. The current filename, identifiers and plan language described her personality as a theatrical layer over a model, contradicting the intended direct formulation: the system is Nox and the document describes Nox.
+- **Decision:** Use `identity/NOX.md`, `identity_id: "nox"`, `identity_sha256`, `--without-identity` and `identity-revision.json`; replace Nox-owned wrapper terminology with direct “Nox”, “Nox identity” or “личность Nox” language. Preserve donor-native Hermes personality features, historical source paths and CSS compositing terminology because they name different concrete mechanisms.
+- **Why this preserves intent:** The document content, behavioral corpus, acceptance thresholds and hash gate remain unchanged. Only the misleading wrapper metaphor and its executable vocabulary are removed.
+- **Acceptance:** The user authorized this terminology-only revision explicitly in the active task. Task 2 still requires separate acceptance of the unchanged Nox document content hash and the updated rubric hash before runtime integration.
+- **Plan hash:** Accepted pre-execution hash `F453963F6B002C9DA343E8A100FE429E66896AFC7BBAECC318955B4896B6D493`; terminology-only revision hash `9B2B14C223B7C0ED7265524431EB5BB34A88A4BAFF2859B178E3141D7070B559`.
+- **Rollback:** None. Future code may name concrete technical mechanisms when necessary, but must not reintroduce wrapper metaphors for Nox herself.
+
+## D-011 — Identity eval uses Hermes' identity slot; explicit style recipes remain diagnostics
+
+- **Recorded:** 2026-07-13
+- **Plan location:** Task 2 black-box eval and Task 3 prompt assembly evidence.
+- **Evidence:** The first candidate runner prepended `identity/NOX.md` to `_build_system_prompt()`. Direct `AIAgent` construction ignored the runner's `HERMES_IGNORE_RULES` environment flag, so the assembled prompt contained Nox followed by the active profile's generic `SOUL.md` identity, `You are Hermes Agent`. Re-running the two style cases after replacing that path with Hermes' native identity slot produced the same literal style imitation. Positive voice edits also left those results unchanged; Sol Medium continued to follow the user's explicit formatting recipe.
+- **Decision:** Simulate final product ordering by supplying Nox through Hermes' primary identity seam, with context files and memory disabled by constructor arguments. Keep explicit formula/caricature requests in a separately reported diagnostic suite. They remain future cortex-training targets and do not block prompt-only identity acceptance. No semantic input filter, response rewrite, prohibited-phrase list or production hook is added.
+- **Why this preserves intent:** The candidate now measures Nox against one coherent identity instead of two competing identities. The acceptance gate continues to cover identity continuity, grounded agency, epistemic honesty, substance and natural voice under ordinary/adversarial requests without turning `NOX.md` into an anti-prompt policy.
+- **Rollback:** Restore a style diagnostic to the blocking negative suite only with an accepted rubric revision and a mechanism consistent with the project's no-filter, positive-identity constraints.
+
+## D-012 — The accepted identity and its session revision ship together
+
+- **Recorded:** 2026-07-13
+- **Plan location:** Task 3 identity loading, prompt snapshot persistence and packaged Desktop proof.
+- **Evidence:** Setuptools package discovery excludes `nox`, and the accepted `identity/NOX.md` sits outside every Python package. A real preflight wheel contained neither. Hermes stores the assembled system prompt in `state.db`, but compression rebuilds it from current files; without an explicit identity snapshot contract, a later Nox revision could silently enter an older session at a compression boundary.
+- **Decision:** Add `nox` to the explicit package allowlist and ship the one canonical `identity/NOX.md` as wheel/sdist data. Persist its source revision, prompt-prefix length and prompt-prefix hash beside the stored system prompt. New sessions bind the current accepted document; resume, model-switch rebuilds and compression reuse the session-bound prefix after verifying it against the stored snapshot.
+- **Why this preserves intent:** Nox remains the stable first prompt tier, `SOUL.md` remains an additive user profile, installed Desktop behavior matches the source checkout, and later tuning affects only new sessions unless an explicit migration is introduced.
+- **Rollback:** Remove the package/data declarations and Nox session metadata only together with the Task 3 prompt integration. Never leave a source-only identity path or silently fall back to generic Hermes identity.

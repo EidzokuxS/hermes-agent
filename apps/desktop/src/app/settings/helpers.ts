@@ -1,7 +1,7 @@
 import { asText } from '@/lib/text'
 import type { HermesConfigRecord, ToolsetInfo } from '@/types/hermes'
 
-import { BUILTIN_PERSONALITIES, ENUM_OPTIONS, PROVIDER_GROUPS } from './constants'
+import { ENUM_OPTIONS, PROVIDER_GROUPS } from './constants'
 
 // Canonical implementations live in @/lib/text; re-exported here so the many
 // settings/capabilities call sites keep their import path.
@@ -123,22 +123,13 @@ export function setNested(obj: HermesConfigRecord, path: string, value: unknown)
   return clone
 }
 
-function personalityOptions(config: HermesConfigRecord): string[] {
-  const custom = getNested(config, 'agent.personalities')
-
-  const customNames =
-    custom && typeof custom === 'object' && !Array.isArray(custom) ? Object.keys(custom as Record<string, unknown>) : []
-
-  return [...new Set(['', ...BUILTIN_PERSONALITIES, ...customNames])]
-}
-
 export function enumOptionsFor(
   key: string,
   value: unknown,
-  config: HermesConfigRecord,
+  _config: HermesConfigRecord,
   dynamicOptions?: string[]
 ): string[] | undefined {
-  const opts = dynamicOptions ?? (key === 'display.personality' ? personalityOptions(config) : ENUM_OPTIONS[key])
+  const opts = dynamicOptions ?? ENUM_OPTIONS[key]
 
   if (!opts) {
     return undefined
