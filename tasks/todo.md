@@ -195,7 +195,7 @@ Goal package создан в `docs/goals/nox-hermes-foundation-migration`. Пл�
 - [x] Task 4 — observational causal bridge.
 - [x] Task 5 — Nox product mode and bounded branding.
 - [x] Task 6 — displaced-path cutover and parity.
-- [ ] Task 7 — target-perspective evidence and final acceptance.
+- [x] Task 7 — target-perspective evidence and final acceptance.
 
 ### Task 0 review
 
@@ -223,7 +223,11 @@ Nox product mode завершён поверх сохранённого Hermes U
 
 ### Task 6 review
 
-Tasks 0–5 зафиксированы checkpoint-коммитом `8515ee78cc`, после чего удалены восемь displaced app/package roots, тринадцать first-loop support files и четыре неиспользуемых root TS/Vitest config. Graph gate теперь проверяет и недостижимость, и физическое отсутствие старого runtime. При cutover обнаружен и исправлен реальный разрыв product path: install/update/relaunch/uninstall искали `Hermes.exe`/`Hermes.app`, хотя пакет уже выпускался как Nox. Bootstrap Setup, shortcuts и executable discovery переведены на Nox. Проверки: Nox/causal/graph 85 pass; focused launcher/uninstaller 92 pass / 1 host skip; Desktop UI 1,197 pass; platform 330 pass / 3 host skips; Bootstrap Rust 27 pass; Desktop/Bootstrap typecheck и build pass; package pass. Evidence: `docs/architecture/displaced-path-cutover.md`. Task 7 открыт.
+Tasks 0–5 зафиксированы checkpoint-коммитом `8515ee78cc`, после чего удалены восемь displaced app/package roots, тринадцать first-loop support files и четыре неиспользуемых root TS/Vitest config. Graph gate теперь проверяет и недостижимость, и физическое отсутствие старого runtime. При cutover обнаружен и исправлен реальный разрыв product path: install/update/relaunch/uninstall искали `Hermes.exe`/`Hermes.app`, хотя пакет уже выпускался как Nox. Bootstrap Setup, shortcuts и executable discovery переведены на Nox. Проверки: Nox/causal/graph 85 pass; focused launcher/uninstaller 92 pass / 1 host skip; Desktop UI 1,197 pass; platform 330 pass / 3 host skips; Bootstrap Rust 27 pass; Desktop/Bootstrap typecheck и build pass; package pass. Evidence: `docs/architecture/displaced-path-cutover.md`.
+
+### Task 7 review
+
+Финальный security-gate нашёл 13 опубликованных уязвимостей в четырёх достижимых Python-пакетах. D-013 разрешил узкое обновление; после него locked production `pip-audit` проверил 64 зависимости с нулём находок, `npm audit --omit=dev` — 1 383 dependency records с нулём находок, `uv pip check` — 107 совместимых установленных пакетов. Чистый commit `61e546c95c` собран Node `24.18.0` в `Nox.exe`. Hidden packaged journey подтвердил Sol Medium, accepted identity, multi-turn continuity, attachment, skill, terminal, streaming, UI Stop, backend kill во время активного turn, полный Desktop restart и resume пяти пользовательских turns. Независимый Journal audit: 22 records, 5 turns, 3 process epochs, 3 complete / 1 interrupted / 1 abandoned, 2 session resumes, 0 issues. Evidence bundle `artifacts/evidence/hermes-foundation/20260713-61e546c` финализирован с решением `release` и дважды offline-верифицирован: 36 файлов, status `pass`. Временные копии `auth.json` удалены.
 
 ### Desktop readiness fix
 

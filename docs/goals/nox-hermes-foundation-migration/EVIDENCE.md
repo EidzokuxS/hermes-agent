@@ -1,6 +1,6 @@
 # Переезд Nox на Hermes Foundation — Evidence
 
-**Status:** execution in progress; Tasks 0–6 complete; Task 7 target-perspective acceptance remains.
+**Status:** complete; release evidence verified for source commit `61e546c95c7d652472fe3c111e92345095ff9e22`.
 
 The completed goal must link one verified bundle from:
 
@@ -20,7 +20,19 @@ Required proof:
 - dependency/security, redaction and offline manifest verification;
 - POST, correctness and maintainability reviews.
 
-Until every required artifact verifies, the result must be called `implemented but unproven`.
+The final manifest satisfies every required artifact listed below; incomplete future runs remain `implemented but unproven` until their own manifest verifies.
+
+## Task 7 final acceptance
+
+- Verified bundle: `artifacts/evidence/hermes-foundation/20260713-61e546c/`
+- Decision: `release`
+- Offline verification: pass twice; 36 manifest-bound files; secret scan pass.
+- Package: clean Windows `Nox.exe` built from `61e546c95c` with Node `24.18.0`.
+- Packaged journey: conversation, multi-turn continuity, attachment, skill, terminal, streaming, UI interruption, backend termination during an active turn, full Desktop restart and transcript resume all pass.
+- Causal audit: 22 records, five turns, three process epochs, three completed turns, one interrupted turn, one abandoned turn, two resume records and zero issues.
+- Security: locked production Python audit 64 dependencies / zero known vulnerabilities; npm production audit 1,383 dependency records / zero vulnerabilities; `uv pip check` pass.
+- Visual QA: 1440×900, 900×700 and 400×620 conversation states, tool/skill state and delayed same-session restart recapture inspected and passing.
+- Temporary OAuth credential copies used by the isolated evidence home were removed after capture.
 
 ## Task 2 candidate
 

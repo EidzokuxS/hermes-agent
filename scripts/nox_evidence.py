@@ -256,7 +256,12 @@ def scan_secrets(bundle: Path) -> dict[str, Any]:
 
 
 def finalize_bundle(bundle: Path, decision: str) -> None:
-    missing = [relative for relative in REQUIRED_FILES if not (bundle / relative).is_file()]
+    generated_reports = {"reviews/redaction.json"}
+    missing = [
+        relative
+        for relative in REQUIRED_FILES
+        if relative not in generated_reports and not (bundle / relative).is_file()
+    ]
     if missing:
         raise EvidenceError("missing required artifacts: " + ", ".join(missing))
 
