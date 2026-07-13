@@ -45,6 +45,25 @@ DISPLACED_ROOTS = (
     "packages/store-sqlite",
     "packages/testkit",
 )
+DISPLACED_SUPPORT_FILES = (
+    "scripts/build-evidence.mjs",
+    "scripts/check-kill-criteria.mjs",
+    "scripts/evidence-secret-scan.mjs",
+    "scripts/verify-evidence.mjs",
+    "tests/e2e/desktop-first-loop.test.ts",
+    "tests/e2e/desktop-projection.test.ts",
+    "tests/integration/cancellation-fence.test.ts",
+    "tests/integration/evidence-secret-scan.test.ts",
+    "tests/integration/first-causal-loop.test.ts",
+    "tests/integration/kill-criteria-scope.test.ts",
+    "tests/integration/production-continuation.test.ts",
+    "tests/integration/restart-recovery.test.ts",
+    "tests/live/real-pi-first-loop.ts",
+    "tsconfig.base.json",
+    "tsconfig.json",
+    "vitest.config.ts",
+    "vitest.workspace.ts",
+)
 FORBIDDEN_PRODUCTION_MARKERS = (
     "@nox/cortex-pi",
     "@nox/interface-rpc",
@@ -76,6 +95,14 @@ IMPORT_PATTERNS = (
 
 def _relative(path: Path) -> str:
     return path.resolve().relative_to(REPO_ROOT).as_posix()
+
+
+def _restored_displaced_paths(root: Path = REPO_ROOT) -> list[str]:
+    return [
+        path
+        for path in (*DISPLACED_ROOTS, *DISPLACED_SUPPORT_FILES)
+        if (root / path).exists()
+    ]
 
 
 def _extract_import_specifiers(source: str) -> tuple[str, ...]:
@@ -247,10 +274,14 @@ def _assert_workspace_contract() -> dict[str, Any]:
     assert "apps/*" not in workspaces
     assert "packages/*" not in workspaces
 
+    restored_paths = _restored_displaced_paths()
+    assert not restored_paths, f"Displaced paths were restored: {restored_paths}"
+
     return {
         "manifest": _relative(package_path),
         "production_workspaces": list(workspaces),
-        "displaced_roots": list(DISPLACED_ROOTS),
+        "removed_roots": list(DISPLACED_ROOTS),
+        "removed_support_files": list(DISPLACED_SUPPORT_FILES),
     }
 
 
@@ -317,6 +348,25 @@ def test_forbidden_route_fixtures_fail(source: str, expected_marker: str) -> Non
 def test_canonical_hermes_route_fixture_passes() -> None:
     source = "spawn(backend.command, ['-m', 'hermes_cli.main', 'serve'])"
     assert _production_violations(source) == []
+
+
+@pytest.mark.parametrize(
+    ("restored_path", "detected_path"),
+    (
+        ("apps/runtime/src/main.ts", "apps/runtime"),
+        ("packages/runtime/src/index.ts", "packages/runtime"),
+        ("scripts/build-evidence.mjs", "scripts/build-evidence.mjs"),
+        ("vitest.workspace.ts", "vitest.workspace.ts"),
+    ),
+)
+def test_restored_displaced_path_fixture_fails(
+    restored_path: str, detected_path: str, tmp_path: Path
+) -> None:
+    fake_root = tmp_path / "repo"
+    path = fake_root / restored_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("restored", encoding="utf-8")
+    assert _restored_displaced_paths(fake_root) == [detected_path]
 
 
 @pytest.mark.parametrize(

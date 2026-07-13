@@ -1,4 +1,4 @@
-# Upstream pins for the first Nox causal loop
+# Upstream pins and provenance
 
 Verified on 2026-07-12 from the upstream Git repositories, package manifests, licenses, and npm registry.
 
@@ -21,7 +21,7 @@ Primary sources:
 - `https://github.com/earendil-works/pi/blob/8479bd84743e8889f728acb21a62794102db0529/packages/agent/package.json`
 - `https://github.com/earendil-works/pi/blob/8479bd84743e8889f728acb21a62794102db0529/LICENSE`
 
-## Hermes Desktop
+## Historical Hermes Desktop slice
 
 - Repository: `https://github.com/NousResearch/hermes-agent`
 - Commit: `4281151ae859241351ba14d8c7682dc67ff4c126`
@@ -29,10 +29,10 @@ Primary sources:
 - License: MIT, copyright 2025 Nous Research.
 - Upstream runtime requirement: Node `^20.19.0 || >=22.12.0`.
 - Electron pin retained for donor compatibility: `40.10.2`.
-- Nox boundary: presentation primitives, safe formatting helpers, theme types/color helpers, window geometry, and selected generic hardening patterns.
-- Exact source blobs and targets: `docs/upstream/hermes-desktop-slice.json`.
+- Historical boundary: presentation primitives, safe formatting helpers, theme types/color helpers, window geometry, and selected generic hardening patterns.
+- Historical source blobs and targets: `docs/upstream/hermes-desktop-slice.json`, superseded by the full-foundation manifest at Task 6.
 
-The full Hermes thread and composer are excluded because their transitive closure reaches gateway, session, model, tool, attachment, voice, notification, and task semantics. Nox builds its own shell and causal projection on the allowlisted presentation vocabulary.
+This slice excluded the full Hermes thread and composer. The accepted migration later replaced that approach with the pinned full Hermes foundation described by `docs/upstream/hermes-foundation.json`.
 
 Primary sources:
 
@@ -47,7 +47,7 @@ Primary sources:
 - npm: `11.16.0`, bundled with the pinned Node Windows distribution used for the Task 0 lock.
 - TypeScript: `6.0.3`, selected because the pinned TypeScript ESLint line supports TypeScript `<6.1.0`.
 - ESLint: `9.39.4` with the Hermes Desktop plugin family and rule shape.
-- Vitest: `4.1.5`; `vitest.workspace.ts` is imported by `vitest.config.ts` through the supported `test.projects` contract.
+- Vitest: `4.1.5`; Desktop invokes Vitest directly through its workspace script. The displaced root Vitest project configuration was removed at Task 6.
 - Vite: `8.1.4`; this stays within Hermes' declared `^8.0.10` range and removes the Windows path-disclosure advisories affecting `8.0.0` through `8.0.15`.
 - React / React DOM: `19.2.7`.
 

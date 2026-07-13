@@ -1,5 +1,8 @@
 {
   "schemaVersion": 1,
+  "status": "historical-superseded",
+  "supersededBy": "docs/upstream/hermes-foundation.json",
+  "supersededAtTask": "nox-hermes-foundation-migration/task-6",
   "source": {
     "repository": "https://github.com/NousResearch/hermes-agent",
     "commit": "4281151ae859241351ba14d8c7682dc67ff4c126",

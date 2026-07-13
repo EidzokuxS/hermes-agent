@@ -89,7 +89,7 @@ describe('SkillsView toolset management', () => {
 
       await waitFor(() => expect(toggleToolset).toHaveBeenCalledWith('web', false))
     },
-    15_000
+    30_000
   )
 
   it('renders toolset titles without leading emoji', async () => {

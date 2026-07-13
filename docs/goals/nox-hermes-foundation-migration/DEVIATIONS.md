@@ -7,7 +7,7 @@
 - **Evidence:** `npm install --package-lock-only --ignore-scripts` rejected `@earendil-works/pi-agent-core@0.80.6` with `ETARGET` under the registry publication cutoff, before producing a valid combined lock.
 - **Decision:** Keep the pinned Hermes `package-lock.json` authoritative, do not add `packages/*`, and replace upstream's broad `apps/*` glob with its exact three pinned app workspaces (`apps/bootstrap-installer`, `apps/desktop`, `apps/shared`) so retained `apps/audit` and `apps/runtime` stay outside the install graph. The existing Nox causal packages remain tracked source and remain recoverable/tested at rollback commit `833dafc34bd7c37b99bf26110419c7edade1af76`; they are not part of the foundation production install or model loop.
 - **Why this preserves intent:** The goal requires one production Desktop and one model/tool loop. Forcing the old Pi dependency into the Hermes lock would make the displaced runtime more coupled to production, not less.
-- **Follow-up:** Task 1's production graph must prove the retained sources are unreachable. Task 6 decides whether they move to an explicit research archive or are removed. Any future executable reuse requires its own lock and accepted authority transfer.
+- **Follow-up:** Task 1 proved the retained sources unreachable. Task 6 removed them after checkpoint `8515ee78cc`; the production graph now rejects their physical restoration. Any future executable reuse requires its own lock and accepted authority transfer.
 - **Rollback:** Re-add an isolated workspace only if its exact dependencies can install without changing Hermes production resolution and a later accepted plan needs it.
 
 ## D-002 — Desktop platform tests use the installed `tsx` loader on Node 24.18

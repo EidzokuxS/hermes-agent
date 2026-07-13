@@ -66,8 +66,14 @@
     "vitest.workspace.ts"
   ],
   "retainedNoxExecution": {
-    "workspaceStatus": "source-only",
-    "productionReachability": "forbidden",
+    "workspaceStatus": "removed-at-task-6",
+    "productionReachability": "absent",
+    "checkpointCommit": "8515ee78cc",
+    "removedRoots": [
+      "apps/audit/**",
+      "apps/runtime/**",
+      "packages/**"
+    ],
     "deviation": "docs/goals/nox-hermes-foundation-migration/DEVIATIONS.md#d-001--retained-typescript-causal-loop-is-source-only-during-the-hermes-baseline"
   },
   "closedPaths": [

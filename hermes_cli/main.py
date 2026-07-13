@@ -5122,19 +5122,19 @@ def _desktop_packaged_executable(desktop_dir: Path) -> Optional[Path]:
     """Return the current platform's unpacked Electron app executable."""
     release_dir = desktop_dir / "release"
     if sys.platform == "darwin":
-        candidates = list(release_dir.glob("mac*/Hermes.app/Contents/MacOS/Hermes"))
+        candidates = list(release_dir.glob("mac*/Nox.app/Contents/MacOS/Nox"))
     elif sys.platform == "win32":
         candidates = [
-            release_dir / "win-unpacked" / "Hermes.exe",
-            release_dir / "win-ia32-unpacked" / "Hermes.exe",
-            release_dir / "win-arm64-unpacked" / "Hermes.exe",
+            release_dir / "win-unpacked" / "Nox.exe",
+            release_dir / "win-ia32-unpacked" / "Nox.exe",
+            release_dir / "win-arm64-unpacked" / "Nox.exe",
         ]
     else:
         candidates = [
-            release_dir / "linux-unpacked" / "hermes",
-            release_dir / "linux-unpacked" / "Hermes",
-            release_dir / "linux-arm64-unpacked" / "hermes",
-            release_dir / "linux-arm64-unpacked" / "Hermes",
+            release_dir / "linux-unpacked" / "nox",
+            release_dir / "linux-unpacked" / "Nox",
+            release_dir / "linux-arm64-unpacked" / "nox",
+            release_dir / "linux-arm64-unpacked" / "Nox",
         ]
 
     existing = [p for p in candidates if p.exists()]
@@ -5352,9 +5352,9 @@ def _stop_desktop_processes_locking_build(desktop_dir: Path) -> list[int]:
     """Terminate any running desktop app executing from this build's ``release``
     dir so a rebuild can replace its (otherwise locked) executable.
 
-    On Windows a running ``Hermes.exe`` keeps an exclusive lock on
-    ``release/win-unpacked/Hermes.exe``. electron-builder's pack then can't
-    delete the stale binary and dies with ``remove …\\Hermes.exe: Access is
+    On Windows a running ``Nox.exe`` keeps an exclusive lock on
+    ``release/win-unpacked/Nox.exe``. electron-builder's pack then can't
+    delete the stale binary and dies with ``remove …\\Nox.exe: Access is
     denied`` / ``ERR_ELECTRON_BUILDER_CANNOT_EXECUTE`` (before-pack hits the same
     EPERM cleaning the dir). The retry path repeats the failure because the lock
     is still held. POSIX lets you unlink a running binary, so this is a no-op
@@ -5444,7 +5444,7 @@ def _desktop_macos_relaunchable_fixup(desktop_dir: Path) -> None:
     exe = _desktop_packaged_executable(desktop_dir)
     if exe is None:
         return
-    # exe = .../Hermes.app/Contents/MacOS/Hermes  ->  app bundle = .../Hermes.app
+    # exe = .../Nox.app/Contents/MacOS/Nox  ->  app bundle = .../Nox.app
     app = exe.parents[2]
     if not str(app).endswith(".app") or not app.is_dir():
         return
@@ -5710,7 +5710,7 @@ def cmd_gui(args: argparse.Namespace):
                       "(CSC_IDENTITY_AUTO_DISCOVERY=false)")
             if not source_mode:
                 # A running desktop instance launched from release/win-unpacked
-                # holds Hermes.exe locked on Windows, so the pack can't replace
+                # holds Nox.exe locked on Windows, so the pack can't replace
                 # it ("Access is denied" / ERR_ELECTRON_BUILDER_CANNOT_EXECUTE).
                 # Stop it first so the rebuild — including the installer's
                 # headless --update rebuild — succeeds instead of failing cryptically.
@@ -5741,7 +5741,7 @@ def cmd_gui(args: argparse.Namespace):
                     print("  ⚠ Desktop build failed; refreshed the Electron download and retrying once...")
                     for p in purged:
                         print(f"    - {p}")
-                    # The purge can't remove a win-unpacked tree whose Hermes.exe
+                    # The purge can't remove a win-unpacked tree whose Nox.exe
                     # is still locked by a running instance; stop it before retry.
                     _stop_desktop_processes_locking_build(desktop_dir)
                     build_result = subprocess.run([npm, "run", build_script], cwd=desktop_dir, env=env, check=False)
@@ -5765,8 +5765,8 @@ def cmd_gui(args: argparse.Namespace):
                 print("✗ Desktop GUI build failed")
                 print(f"  Run manually:  cd apps/desktop && npm run {build_script}")
                 if sys.platform == "win32":
-                    print("  If this says \"Access is denied\" on Hermes.exe, close any")
-                    print("  running Hermes desktop window and retry.")
+                    print("  If this says \"Access is denied\" on Nox.exe, close any")
+                    print("  running Nox desktop window and retry.")
                 print("  If the log shows Electron download retries, rebuild via a mirror:")
                 print("    ELECTRON_MIRROR=<mirror-base-url> hermes desktop --force-build")
                 sys.exit(build_result.returncode or 1)

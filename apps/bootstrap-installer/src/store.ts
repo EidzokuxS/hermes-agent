@@ -68,7 +68,7 @@ export type Route = 'welcome' | 'progress' | 'success' | 'failure'
 
 /// How the installer was launched, mirrored from src-tauri AppMode.
 /// 'install' = first-run onboarding (bare launch). 'update' = driven by the
-/// desktop app handing off via `Hermes-Setup.exe --update`.
+/// desktop app handing off via `Nox-Setup.exe --update`.
 export type AppMode = 'install' | 'update'
 
 export const $route = atom<Route>('welcome')
@@ -77,7 +77,7 @@ export const $bootstrap = atom<BootstrapStateModel>(INITIAL)
 export const $logPath = atom<string | null>(null)
 export const $hermesHome = atom<string | null>(null)
 
-export const $progress = computed($bootstrap, (b) => {
+export const $progress = computed($bootstrap, b => {
   const total = b.stageOrder.length
   if (total === 0) return { done: 0, total: 0, fraction: 0 }
   let done = 0
@@ -192,7 +192,7 @@ export async function initialize(): Promise<void> {
     console.warn('failed to fetch installer paths', err)
   }
 
-  unlisten = await listen<BootstrapEvent>('bootstrap', (event) => {
+  unlisten = await listen<BootstrapEvent>('bootstrap', event => {
     const payload = event.payload
     const cur = $bootstrap.get()
     switch (payload.type) {
@@ -222,9 +222,7 @@ export async function initialize(): Promise<void> {
           console.warn('stage event for unknown stage', payload.name)
           break
         }
-        $bootstrap.set(
-          withStageState(cur, payload.name, payload.state, payload.durationMs, payload.error)
-        )
+        $bootstrap.set(withStageState(cur, payload.name, payload.state, payload.durationMs, payload.error))
         break
       }
       case 'log': {
@@ -242,7 +240,7 @@ export async function initialize(): Promise<void> {
           installRoot: payload.installRoot,
           currentStage: null
         })
-        // Install: show the "launch Hermes" success screen. Update: this is a
+        // Install: show the "launch Nox" success screen. Update: this is a
         // hand-off — the installer relaunches the desktop and exits within a
         // few hundred ms, so routing to success just flashes that screen
         // before the window closes. Stay on progress until we exit.
@@ -299,7 +297,7 @@ export async function startUpdate(): Promise<void> {
     void runFakeBoot('update')
     return
   }
-  // Update is driven by the desktop handing off (Hermes-Setup.exe --update);
+  // Update is driven by the desktop handing off (Nox-Setup.exe --update);
   // there's no welcome click. Reset + jump straight to progress, then let the
   // Rust side stream the synthetic update manifest.
   $bootstrap.set(INITIAL)
@@ -355,7 +353,7 @@ const FAKE_INSTALL_STAGES: FakeStage[] = [
   { name: 'system-packages', title: 'System packages' },
   { name: 'uv', title: 'uv' },
   { name: 'python', title: 'Python environment' },
-  { name: 'repo', title: 'Hermes repository' },
+  { name: 'repo', title: 'Nox source' },
   { name: 'dependencies', title: 'Python dependencies' },
   { name: 'node', title: 'Node runtime' },
   { name: 'desktop', title: 'Desktop app' }
@@ -368,7 +366,7 @@ const FAKE_UPDATE_STAGES: FakeStage[] = [
   { name: 'install', title: 'Installing the update' }
 ]
 
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms))
 
 let fakeRunning = false
 let fakeCancelled = false
@@ -379,8 +377,7 @@ const fakeStage = (name: string, state: StageState, durationMs?: number, error?:
 const fakeLog = (stage: string, line: string) =>
   $bootstrap.set({ ...$bootstrap.get(), logs: [...$bootstrap.get().logs, { stage, line, stream: 'stdout' }] })
 
-const fakeFail = (error: string) =>
-  $bootstrap.set({ ...$bootstrap.get(), status: 'failed', error, currentStage: null })
+const fakeFail = (error: string) => $bootstrap.set({ ...$bootstrap.get(), status: 'failed', error, currentStage: null })
 
 async function runFakeBoot(kind: FakeMode): Promise<void> {
   if (fakeRunning) return
@@ -398,7 +395,7 @@ async function runFakeBoot(kind: FakeMode): Promise<void> {
     $bootstrap.set({
       ...INITIAL,
       status: 'running',
-      stageOrder: stages.map((s) => s.name),
+      stageOrder: stages.map(s => s.name),
       stages: Object.fromEntries(
         stages.map((s): [string, StageRecord] => [
           s.name,

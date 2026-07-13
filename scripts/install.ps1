@@ -43,15 +43,15 @@ param(
 
     # --- Desktop GUI build (opt-in) ---
     # When set, install.ps1 includes Stage-Desktop in the manifest and
-    # builds apps/desktop into a launchable Hermes.exe.
+    # builds apps/desktop into a launchable Nox.exe.
     #
     # Why opt-in:
     #   * Hermes-Setup.exe (the signed Tauri bootstrap installer) passes
     #     -IncludeDesktop so a user who installed via the GUI ends up
     #     with a launchable desktop binary.
     #   * The Electron desktop's own bootstrap-runner.ts runs install.ps1
-    #     from inside an already-launched Hermes.exe; if THAT recursively
-    #     built apps/desktop it would try to overwrite the live Hermes.exe
+    #     from inside an already-launched Nox.exe; if THAT recursively
+    #     built apps/desktop it would try to overwrite the live Nox.exe
     #     on disk and fail. The recursive path omits the flag.
     #   * The canonical CLI one-liner (irm | iex) omits the flag too;
     #     terminal users don't need a desktop binary built for them, and
@@ -2637,7 +2637,7 @@ function Try-RestoreElectronDist {
 }
 
 function Install-Desktop {
-    # Build apps/desktop into a launchable Hermes.exe. Only called from
+    # Build apps/desktop into a launchable Nox.exe. Only called from
     # Stage-Desktop, which is itself only included in the manifest when
     # -IncludeDesktop was passed to install.ps1.
     #
@@ -2650,7 +2650,7 @@ function Install-Desktop {
     # produces the unpacked binary at apps/desktop/release/<os>-unpacked/.
     #
     # The Tauri bootstrap installer's launch_hermes_desktop command
-    # resolves apps/desktop/release/win-unpacked/Hermes.exe directly,
+    # resolves apps/desktop/release/win-unpacked/Nox.exe directly,
     # so an "unpacked" build (electron-builder --dir) is enough — we
     # don't need to produce an NSIS/MSI artifact here.
 
@@ -2751,7 +2751,7 @@ function Install-Desktop {
     # 2. Build apps/desktop. `npm run pack` runs:
     #      assert-root-install + write-build-stamp + stage-native-deps +
     #      tsc -b + vite build + electron-builder --dir
-    # The --dir mode produces an unpacked Hermes.exe in
+    # The --dir mode produces an unpacked Nox.exe in
     # apps/desktop/release/win-unpacked/ without bundling NSIS/MSI;
     # we don't need a distributable installer artifact, just a
     # launchable binary the Tauri installer can spawn.
@@ -2761,8 +2761,8 @@ function Install-Desktop {
     # apps/desktop/package.json's build.win block, electron-builder never
     # invokes signtool and therefore never fetches/extracts winCodeSign
     # (whose macOS symlinks crash 7-Zip on non-admin Windows — a dead end we
-    # are NOT trying to work around). The Hermes icon + product name are
-    # stamped onto Hermes.exe by our own rcedit step (Set-DesktopExeIdentity)
+    # are NOT trying to work around). The Nox icon + product name are
+    # stamped onto Nox.exe by our own rcedit step (Set-DesktopExeIdentity)
     # AFTER this build, completely decoupled from electron-builder signing.
     #
     # WIN_CSC_LINK and WIN_CSC_KEY_PASSWORD explicitly cleared as
@@ -2843,8 +2843,8 @@ function Install-Desktop {
     # 3. Sanity-check the produced binary. Probe both arches so this works
     # on x64 and arm64 build machines.
     $exeCandidates = @(
-        "$desktopDir\release\win-unpacked\Hermes.exe",
-        "$desktopDir\release\win-arm64-unpacked\Hermes.exe"
+        "$desktopDir\release\win-unpacked\Nox.exe",
+        "$desktopDir\release\win-arm64-unpacked\Nox.exe"
     )
     $found = $false
     $desktopExe = $null
@@ -2857,10 +2857,10 @@ function Install-Desktop {
         }
     }
     if (-not $found) {
-        throw "Desktop build completed but no Hermes.exe was found under $desktopDir\release\*-unpacked\"
+        throw "Desktop build completed but no Nox.exe was found under $desktopDir\release\*-unpacked\"
     }
 
-    # 3b. The Hermes icon + identity are stamped onto Hermes.exe by the
+    # 3b. The Nox icon + identity are stamped onto Nox.exe by the
     #     electron-builder `afterPack` hook (apps/desktop/scripts/after-pack.mjs)
     #     during `npm run pack` above — for every build, so the installer's
     #     --update rebuild stays branded too. No separate stamp step needed here.
@@ -2869,7 +2869,7 @@ function Install-Desktop {
     #     unfixable symlink crash; the afterPack hook runs rcedit directly.
 
     # 4. Create Start Menu + Desktop shortcuts pointing DIRECTLY at the packed
-    #    Hermes.exe. We deliberately do NOT point them at `hermes desktop`: that
+    #    Nox.exe. We deliberately do NOT point them at `hermes desktop`: that
     #    command rebuilds (npm install + electron-builder) on every launch,
     #    which would cost minutes each time. The packed exe is the consumer —
     #    launching it directly is instant, and updates flow through the
@@ -2900,8 +2900,8 @@ function New-DesktopShortcuts {
         }
 
         $targets = @(
-            (Join-Path ([Environment]::GetFolderPath('Programs')) 'Hermes.lnk'),
-            (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Hermes.lnk')
+            (Join-Path ([Environment]::GetFolderPath('Programs')) 'Nox.lnk'),
+            (Join-Path ([Environment]::GetFolderPath('Desktop')) 'Nox.lnk')
         )
 
         foreach ($lnkPath in $targets) {
@@ -2914,7 +2914,7 @@ function New-DesktopShortcuts {
                 $sc.TargetPath = $TargetExe
                 $sc.WorkingDirectory = $workDir
                 $sc.IconLocation = $iconLocation
-                $sc.Description = 'Hermes Agent'
+                $sc.Description = 'Nox'
                 $sc.Save()
                 Write-Success "Shortcut created: $lnkPath"
             } catch {
@@ -2925,7 +2925,7 @@ function New-DesktopShortcuts {
         # Bust the Windows shell icon cache so the desktop/Start-Menu shortcut
         # repaints with the (possibly newly-stamped) icon instead of a stale
         # cached bitmap. Critical on the --update path: the exe was re-stamped
-        # with the Hermes icon, but without this the shortcut can keep drawing
+        # with the Nox icon, but without this the shortcut can keep drawing
         # the old Electron icon until the user manually refreshes / reboots.
         # Best-effort and silent — never fail the install over a cosmetic cache.
         try {
@@ -3291,7 +3291,7 @@ $InstallStages = @(
     @{ Name = "git";              Title = "Installing Git";                       Category = "prereqs";      NeedsUserInput = $false; Worker = "Stage-Git" }
     @{ Name = "node";             Title = "Detecting Node.js";                    Category = "prereqs";      NeedsUserInput = $false; Worker = "Stage-Node" }
     @{ Name = "system-packages";  Title = "Installing ripgrep and ffmpeg";        Category = "prereqs";      NeedsUserInput = $false; Worker = "Stage-SystemPackages" }
-    @{ Name = "repository";       Title = "Cloning Hermes repository";            Category = "install";      NeedsUserInput = $false; Worker = "Stage-Repository" }
+    @{ Name = "repository";       Title = "Preparing Nox source";                 Category = "install";      NeedsUserInput = $false; Worker = "Stage-Repository" }
     @{ Name = "venv";             Title = "Creating Python virtual environment";  Category = "install";      NeedsUserInput = $false; Worker = "Stage-Venv" }
     @{ Name = "dependencies";     Title = "Installing Python dependencies";       Category = "install";      NeedsUserInput = $false; Worker = "Stage-Dependencies" }
     @{ Name = "node-deps";        Title = "Installing Node.js dependencies";      Category = "install";      NeedsUserInput = $false; Worker = "Stage-NodeDeps" }

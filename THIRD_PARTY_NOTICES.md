@@ -35,7 +35,7 @@ SOFTWARE.
 
 ## Hermes Agent
 
-Nox uses the full Hermes Agent source tree as its product foundation at commit `4281151ae859241351ba14d8c7682dc67ff4c126` (Desktop `0.17.0`). Import provenance and the retained/adapted Nox boundaries are recorded in `docs/upstream/hermes-foundation.json`. The older `docs/upstream/hermes-desktop-slice.json` describes the superseded first-loop donor slice and remains historical until the final migration cutover.
+Nox uses the full Hermes Agent source tree as its product foundation at commit `4281151ae859241351ba14d8c7682dc67ff4c126` (Desktop `0.17.0`). Import provenance and the retained/adapted Nox boundaries are recorded in `docs/upstream/hermes-foundation.json`. The older `docs/upstream/hermes-desktop-slice.json` is retained only as historical provenance for the superseded first-loop donor slice.
 
 Source: `https://github.com/NousResearch/hermes-agent`
 

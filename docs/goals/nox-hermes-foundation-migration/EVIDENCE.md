@@ -1,6 +1,6 @@
 # Переезд Nox на Hermes Foundation — Evidence
 
-**Status:** execution in progress; Tasks 0–5 complete; Task 6 cutover awaits its clean checkpoint.
+**Status:** execution in progress; Tasks 0–6 complete; Task 7 target-perspective acceptance remains.
 
 The completed goal must link one verified bundle from:
 
@@ -111,4 +111,13 @@ The previous Nox revision hashes `e43ad17d4c47df63ff776dc057df115ff9525302c63f5d
 - Hidden packaged-Electron capture produced inspected 1440×900, 900×700 and 400×620 screenshots without taking user focus. All three responsive states pass.
 - Validation: typecheck pass; lint 0 errors; UI 148 files / 1,197 tests pass; Electron platform 333 tests / 330 pass / 3 host skips / 0 fail; production build and isolated unpacked package pass.
 - Detailed contract, data matrix, hashes, visual findings and command results: `docs/architecture/nox-product-mode-evidence.md`.
+
+## Task 6 displaced-path cutover
+
+- Tasks 0–5 were checkpointed at `8515ee78cc` before deletion. The eight displaced app/package roots (94 files, 311,662 bytes), thirteen first-loop support files and four unconsumed root TS/Vitest configs were removed without changing `package-lock.json`.
+- `tests/nox/test_production_graph.py` requires the removed paths to remain absent and includes restoration fixtures for the old runtime, runtime package, evidence script and Vitest workspace.
+- The historical Desktop slice manifest is explicitly superseded by the full Hermes foundation manifest.
+- Install, update, relaunch and uninstall paths now match the packaged Nox executable and app bundle. Bootstrap Setup carries Nox metadata, copy and branding while internal Hermes CLI/config names remain stable.
+- Validation: Nox identity/causal/graph `85` pass; focused graph plus GUI launcher/uninstaller `92` pass / one host skip; Desktop UI `1,197` pass; Desktop platform `330` pass / three host skips; Bootstrap Rust `27` pass; Desktop/Bootstrap typecheck and builds pass; Desktop lint zero errors; packaged `Nox.exe` SHA-256 `ccc85da7ee2bf88a1cdf035853248f5332ebaf8bad52196c1daa6800442f20c0`.
+- Detailed deletion inventory and proof: `docs/architecture/displaced-path-cutover.md`.
 

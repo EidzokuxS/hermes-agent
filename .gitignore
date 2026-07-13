@@ -70,6 +70,7 @@ apps/desktop/build/
 apps/desktop/dist/
 apps/desktop/release/
 apps/desktop/release-qa/
+apps/desktop/release-cutover/
 /build/
 apps/desktop/*.tsbuildinfo
 

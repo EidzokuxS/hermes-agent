@@ -40,11 +40,11 @@ def _make_packaged_executable(root: Path, monkeypatch, platform: str = "darwin")
     monkeypatch.setattr(cli_main.sys, "platform", platform)
     desktop_dir = root / "apps" / "desktop"
     if platform == "darwin":
-        exe = desktop_dir / "release" / "mac-arm64" / "Hermes.app" / "Contents" / "MacOS" / "Hermes"
+        exe = desktop_dir / "release" / "mac-arm64" / "Nox.app" / "Contents" / "MacOS" / "Nox"
     elif platform == "win32":
-        exe = desktop_dir / "release" / "win-unpacked" / "Hermes.exe"
+        exe = desktop_dir / "release" / "win-unpacked" / "Nox.exe"
     else:
-        exe = desktop_dir / "release" / "linux-unpacked" / "hermes"
+        exe = desktop_dir / "release" / "linux-unpacked" / "nox"
     exe.parent.mkdir(parents=True)
     exe.write_text("", encoding="utf-8")
     return exe
@@ -113,7 +113,7 @@ def test_gui_exits_when_npm_missing(tmp_path, monkeypatch, capsys):
     root = _make_desktop_tree(tmp_path)
     monkeypatch.setattr(cli_main, "PROJECT_ROOT", root)
 
-    with patch("hermes_cli.main.shutil.which", return_value=None), \
+    with patch("hermes_constants.find_node_executable", return_value=None), \
          pytest.raises(SystemExit) as exc:
         cli_main.cmd_gui(_ns())
 
@@ -266,7 +266,7 @@ def test_gui_source_mode_uses_renderer_build_and_electron(tmp_path, monkeypatch)
     build_ok = subprocess.CompletedProcess(["npm", "run", "build"], 0)
     launch_ok = subprocess.CompletedProcess(["npm", "exec", "--", "electron", "."], 0)
 
-    with patch("hermes_cli.main.shutil.which", return_value="/usr/bin/npm"), \
+    with patch("hermes_constants.find_node_executable", return_value="/usr/bin/npm"), \
          patch("hermes_cli.main._run_npm_install_deterministic", return_value=install_ok), \
          patch("hermes_cli.main._desktop_build_needed", return_value=True), \
          patch("hermes_cli.main._write_desktop_build_stamp"), \
@@ -512,7 +512,7 @@ def test_gui_retries_pack_once_after_purging_build_cache(tmp_path, monkeypatch):
     # signature the cache purge + retry exist for (#40187). Only the successful
     # retry produces it (via the side_effect below).
     monkeypatch.setattr(cli_main.sys, "platform", "linux")
-    packaged_exe = root / "apps" / "desktop" / "release" / "linux-unpacked" / "hermes"
+    packaged_exe = root / "apps" / "desktop" / "release" / "linux-unpacked" / "nox"
 
     install_ok = subprocess.CompletedProcess(["npm", "ci"], 0)
     pack_fail = subprocess.CompletedProcess(["npm", "run", "pack"], 1)
@@ -709,7 +709,7 @@ def test_gui_does_not_retry_after_packaged_executable_exists(tmp_path, monkeypat
     Electron-download problem the cache purge + mirror retries exist to repair.
 
     Regression for #40187: a late failure such as macOS code signing leaves
-    Hermes.app/Contents/MacOS/Hermes in place. Re-downloading Electron can't
+    Nox.app/Contents/MacOS/Nox in place. Re-downloading Electron can't
     repair a signing failure, so the destructive purge + slow mirror retry must
     be skipped — we fail directly instead of grinding through an identical retry.
     """
@@ -915,7 +915,7 @@ class _FakeProc:
 def test_stop_desktop_build_lock_noop_off_windows(tmp_path, monkeypatch):
     """POSIX can unlink a running binary, so the helper is a no-op there."""
     desktop_dir = tmp_path / "apps" / "desktop"
-    exe = desktop_dir / "release" / "linux-unpacked" / "hermes"
+    exe = desktop_dir / "release" / "linux-unpacked" / "nox"
     exe.parent.mkdir(parents=True)
     exe.write_text("", encoding="utf-8")
     monkeypatch.setattr(cli_main.sys, "platform", "linux")
@@ -931,9 +931,9 @@ def test_stop_desktop_build_lock_terminates_only_release_procs(tmp_path, monkeyp
     desktop_dir = tmp_path / "apps" / "desktop"
     release = desktop_dir / "release" / "win-unpacked"
     release.mkdir(parents=True)
-    locker_exe = release / "Hermes.exe"
+    locker_exe = release / "Nox.exe"
     locker_exe.write_text("", encoding="utf-8")
-    other_exe = tmp_path / "elsewhere" / "Hermes.exe"
+    other_exe = tmp_path / "elsewhere" / "Nox.exe"
     other_exe.parent.mkdir(parents=True)
     other_exe.write_text("", encoding="utf-8")
 

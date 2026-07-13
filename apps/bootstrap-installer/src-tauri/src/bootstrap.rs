@@ -156,31 +156,32 @@ pub async fn get_bootstrap_status(
     })
 }
 
-/// Spawn the locally-built Hermes desktop binary, then close the installer
+/// Spawn the locally-built Nox desktop binary, then close the installer
 /// window. Caller resolves the binary path from `install_root`.
 ///
 /// Returns Err with a human-readable message if the binary doesn't exist
 /// (e.g. when Stage-Desktop was skipped) so the frontend can present
 /// actionable failure UI rather than silently doing nothing.
 #[tauri::command]
-pub async fn launch_hermes_desktop(
-    app: AppHandle,
-    install_root: String,
-) -> Result<(), String> {
+pub async fn launch_hermes_desktop(app: AppHandle, install_root: String) -> Result<(), String> {
     let install_root = PathBuf::from(install_root);
     let exe_path = resolve_hermes_desktop_exe(&install_root).ok_or_else(|| {
         format!(
-            "Couldn't find a built Hermes desktop at {}. The desktop build step \
+            "Couldn't find a built Nox desktop at {}. The desktop build step \
              may have been skipped or failed. Run `hermes desktop` from a \
              terminal to build and launch it.",
-            install_root.join("apps").join("desktop").join("release").display()
+            install_root
+                .join("apps")
+                .join("desktop")
+                .join("release")
+                .display()
         )
     })?;
 
-    tracing::info!(?exe_path, "launching Hermes desktop");
+    tracing::info!(?exe_path, "launching Nox desktop");
 
     // Detach from us — the installer is about to exit. On macOS launch the
-    // bundle through LaunchServices instead of exec'ing Contents/MacOS/Hermes
+    // bundle through LaunchServices instead of exec'ing Contents/MacOS/Nox
     // directly; this matches user double-click/open behavior and avoids cwd /
     // quarantine oddities after a self-update rebuild.
     let mut cmd = desktop_launch_command(&exe_path, &install_root);
@@ -191,12 +192,8 @@ pub async fn launch_hermes_desktop(
         cmd.creation_flags(0x0000_0008);
     }
 
-    cmd.spawn().map_err(|e| {
-        format!(
-            "failed to launch {}: {e}",
-            exe_path.display()
-        )
-    })?;
+    cmd.spawn()
+        .map_err(|e| format!("failed to launch {}: {e}", exe_path.display()))?;
 
     // Give Windows ~150ms to actually start the new process before we exit.
     tokio::time::sleep(std::time::Duration::from_millis(150)).await;
@@ -214,13 +211,13 @@ pub(crate) fn resolve_hermes_desktop_exe(install_root: &std::path::Path) -> Opti
     let release_dir = install_root.join("apps").join("desktop").join("release");
     let candidates: &[(&str, &str)] = if cfg!(target_os = "windows") {
         &[
-            ("win-unpacked", "Hermes.exe"),
-            ("win-arm64-unpacked", "Hermes.exe"),
+            ("win-unpacked", "Nox.exe"),
+            ("win-arm64-unpacked", "Nox.exe"),
         ]
     } else if cfg!(target_os = "macos") {
         &[
-            ("mac/Hermes.app/Contents/MacOS", "Hermes"),
-            ("mac-arm64/Hermes.app/Contents/MacOS", "Hermes"),
+            ("mac/Nox.app/Contents/MacOS", "Nox"),
+            ("mac-arm64/Nox.app/Contents/MacOS", "Nox"),
         ]
     } else {
         &[("linux-unpacked", "hermes")]
@@ -238,7 +235,7 @@ pub(crate) fn resolve_hermes_desktop_app(install_root: &std::path::Path) -> Opti
     let exe = resolve_hermes_desktop_exe(install_root)?;
     #[cfg(target_os = "macos")]
     {
-        // .../Hermes.app/Contents/MacOS/Hermes -> .../Hermes.app
+        // .../Nox.app/Contents/MacOS/Nox -> .../Nox.app
         let app = exe.parent()?.parent()?.parent()?.to_path_buf();
         if app.extension().and_then(|e| e.to_str()) == Some("app") && app.is_dir() {
             return Some(app);
@@ -254,7 +251,7 @@ pub(crate) fn resolve_hermes_desktop_app(install_root: &std::path::Path) -> Opti
 
 /// True when a prior install completed (bootstrap-complete marker present) AND a
 /// launchable desktop app exists on disk. Used by the installer's launcher fast
-/// path so a bare re-open just opens Hermes instead of re-running setup.
+/// path so a bare re-open just opens Nox instead of re-running setup.
 pub(crate) fn hermes_is_installed(install_root: &std::path::Path) -> bool {
     install_root.join(".hermes-bootstrap-complete").exists()
         && resolve_hermes_desktop_exe(install_root).is_some()
@@ -265,7 +262,7 @@ pub(crate) fn hermes_is_installed(install_root: &std::path::Path) -> bool {
 /// installer UI.
 pub(crate) fn spawn_installed_desktop(install_root: &std::path::Path) -> std::io::Result<()> {
     let exe = resolve_hermes_desktop_exe(install_root).ok_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::NotFound, "no built Hermes desktop app")
+        std::io::Error::new(std::io::ErrorKind::NotFound, "no built Nox desktop app")
     })?;
     let mut cmd = desktop_launch_command_std(&exe, install_root);
     #[cfg(target_os = "windows")]
@@ -348,8 +345,12 @@ async fn run_bootstrap(
     let kind = ScriptKind::for_current_os();
 
     let pin = Pin {
-        commit: args.commit.or_else(|| option_env_string("BUILD_PIN_COMMIT")),
-        branch: args.branch.or_else(|| option_env_string("BUILD_PIN_BRANCH")),
+        commit: args
+            .commit
+            .or_else(|| option_env_string("BUILD_PIN_COMMIT")),
+        branch: args
+            .branch
+            .or_else(|| option_env_string("BUILD_PIN_BRANCH")),
     };
 
     tracing::info!(
@@ -443,20 +444,21 @@ async fn run_bootstrap(
         return Err(anyhow!(err));
     }
 
-    let manifest: Manifest = powershell::parse_manifest(&manifest_result.stdout).ok_or_else(|| {
-        let err = format!(
-            "install.ps1 -Manifest produced no parseable JSON payload\n{}",
-            truncate(&manifest_result.stdout, 4000)
-        );
-        emit_event(
-            &app,
-            BootstrapEvent::Failed {
-                stage: None,
-                error: err.clone(),
-            },
-        );
-        anyhow!(err)
-    })?;
+    let manifest: Manifest =
+        powershell::parse_manifest(&manifest_result.stdout).ok_or_else(|| {
+            let err = format!(
+                "install.ps1 -Manifest produced no parseable JSON payload\n{}",
+                truncate(&manifest_result.stdout, 4000)
+            );
+            emit_event(
+                &app,
+                BootstrapEvent::Failed {
+                    stage: None,
+                    error: err.clone(),
+                },
+            );
+            anyhow!(err)
+        })?;
 
     emit_event(
         &app,
@@ -650,7 +652,10 @@ async fn run_bootstrap(
     // we're already running from that path. Best-effort — a failure here must
     // not fail an otherwise-successful install.
     if let Err(err) = crate::paths::copy_self_to_hermes_home() {
-        tracing::warn!(?err, "failed to copy installer into HERMES_HOME (non-fatal)");
+        tracing::warn!(
+            ?err,
+            "failed to copy installer into HERMES_HOME (non-fatal)"
+        );
         emit_log(&format!(
             "[bootstrap] warning: could not stage updater binary: {err}"
         ));
@@ -821,8 +826,8 @@ fn truncate(s: &str, max: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
     use std::path::Path;
+    use std::path::PathBuf;
 
     fn unique_tmp_dir(tag: &str) -> PathBuf {
         let base = std::env::temp_dir().join(format!(
@@ -844,16 +849,16 @@ mod tests {
         if cfg!(target_os = "macos") {
             let macos_dir = release
                 .join("mac-arm64")
-                .join("Hermes.app")
+                .join("Nox.app")
                 .join("Contents")
                 .join("MacOS");
             std::fs::create_dir_all(&macos_dir).unwrap();
-            std::fs::write(macos_dir.join("Hermes"), b"#!/bin/sh\n").unwrap();
-            macos_dir.parent().unwrap().parent().unwrap().to_path_buf() // .../Hermes.app
+            std::fs::write(macos_dir.join("Nox"), b"#!/bin/sh\n").unwrap();
+            macos_dir.parent().unwrap().parent().unwrap().to_path_buf() // .../Nox.app
         } else if cfg!(target_os = "windows") {
             let dir = release.join("win-unpacked");
             std::fs::create_dir_all(&dir).unwrap();
-            let exe = dir.join("Hermes.exe");
+            let exe = dir.join("Nox.exe");
             std::fs::write(&exe, b"stub").unwrap();
             exe
         } else {
@@ -867,7 +872,7 @@ mod tests {
 
     // The relaunch / install target is derived from the rebuilt desktop app.
     // On macOS this MUST resolve to the .app bundle (what `open` relaunches and
-    // what the updater ditto's over /Applications/Hermes.app). A regression in
+    // what the updater ditto's over /Applications/Nox.app). A regression in
     // this derivation breaks the post-update auto-relaunch, so guard it.
     #[test]
     fn resolve_hermes_desktop_app_finds_built_bundle() {

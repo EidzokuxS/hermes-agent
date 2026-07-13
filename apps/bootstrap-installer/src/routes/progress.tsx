@@ -1,13 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useStore } from '@nanostores/react'
 import { Button } from '../components/button'
-import {
-  cancelInstall,
-  $mode,
-  $progress,
-  type BootstrapStateModel,
-  type StageState
-} from '../store'
+import { cancelInstall, $mode, $progress, type BootstrapStateModel, type StageState } from '../store'
 import { Check, X, ChevronRight, FileText } from 'lucide-react'
 import clsx from 'clsx'
 import { BrandMark } from '../components/brand-mark'
@@ -47,10 +41,10 @@ export default function ProgressScreen({ bootstrap }: ProgressProps) {
   }, [bootstrap.status])
 
   const isUpdate = mode === 'update'
-  const title = bootstrap.status === 'completed' ? 'Done' : isUpdate ? 'Updating Hermes' : 'Setting up Hermes Agent'
+  const title = bootstrap.status === 'completed' ? 'Done' : isUpdate ? 'Updating Nox' : 'Setting up Nox'
   const description = isUpdate
-    ? 'Hermes is updating to the latest version — this only takes a moment.'
-    : 'This is a one-time setup. The Hermes installer is downloading dependencies and configuring your machine. Subsequent launches will skip this step.'
+    ? 'Nox is updating to the latest version. This should only take a moment.'
+    : 'This is a one-time setup. The installer is downloading dependencies and configuring your machine.'
   const pct = Math.round(progress.fraction * 100)
 
   return (
@@ -88,7 +82,7 @@ export default function ProgressScreen({ bootstrap }: ProgressProps) {
               muted. Running loader overhangs left so labels stay aligned; the
               terminal check/cross sits right of the label. */}
           <ol className="space-y-0.5">
-            {bootstrap.stageOrder.map((name) => {
+            {bootstrap.stageOrder.map(name => {
               const rec = bootstrap.stages[name]
               if (!rec) return null
               const meta =
@@ -102,9 +96,7 @@ export default function ProgressScreen({ bootstrap }: ProgressProps) {
                   key={name}
                   className={clsx(
                     'flex items-center gap-2.5 px-3 py-1.5 text-sm',
-                    rec.state === 'running'
-                      ? 'font-medium text-foreground'
-                      : 'text-muted-foreground'
+                    rec.state === 'running' ? 'font-medium text-foreground' : 'text-muted-foreground'
                   )}
                 >
                   {rec.state === 'running' && <Loader className="-ml-2 size-6 shrink-0" />}
@@ -144,7 +136,7 @@ export default function ProgressScreen({ bootstrap }: ProgressProps) {
       <div className="flex shrink-0 items-center justify-between border-t border-(--stroke-nous) px-6 py-3">
         <button
           type="button"
-          onClick={() => setShowLogs((v) => !v)}
+          onClick={() => setShowLogs(v => !v)}
           className="inline-flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
         >
           <FileText size={14} />

@@ -3331,7 +3331,7 @@
       "ui-tui/packages/*",
       "web"
     ],
-    "displaced_roots": [
+    "removed_roots": [
       "apps/audit",
       "apps/runtime",
       "packages/cortex-pi",
@@ -3340,6 +3340,25 @@
       "packages/runtime",
       "packages/store-sqlite",
       "packages/testkit"
+    ],
+    "removed_support_files": [
+      "scripts/build-evidence.mjs",
+      "scripts/check-kill-criteria.mjs",
+      "scripts/evidence-secret-scan.mjs",
+      "scripts/verify-evidence.mjs",
+      "tests/e2e/desktop-first-loop.test.ts",
+      "tests/e2e/desktop-projection.test.ts",
+      "tests/integration/cancellation-fence.test.ts",
+      "tests/integration/evidence-secret-scan.test.ts",
+      "tests/integration/first-causal-loop.test.ts",
+      "tests/integration/kill-criteria-scope.test.ts",
+      "tests/integration/production-continuation.test.ts",
+      "tests/integration/restart-recovery.test.ts",
+      "tests/live/real-pi-first-loop.ts",
+      "tsconfig.base.json",
+      "tsconfig.json",
+      "vitest.config.ts",
+      "vitest.workspace.ts"
     ]
   },
   "python_nox_imports": {

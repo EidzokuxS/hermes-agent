@@ -16,8 +16,8 @@
 - Let the Nox Journal own only Nox causal/provenance records and constitutional State. Record Hermes outcomes as observed, never as authored by the Journal.
 - Treat Desktop stores, transcripts, snapshots, and evidence as projections rather than competing truth stores.
 - Keep Electron main as the local-backend process owner. Renderer and preload must use typed Hermes surfaces; they must not spawn a second runtime.
-- Keep `apps/runtime`, `apps/audit`, and `packages/{cortex-pi,interface-rpc,protocol,runtime,store-sqlite,testkit}` outside production workspaces and entrypoint graphs until the accepted plan explicitly transfers a bounded responsibility.
-- Keep `packages/testkit` unreachable from production entrypoints.
+- Keep the removed `apps/{runtime,audit}` and `packages/{cortex-pi,interface-rpc,protocol,runtime,store-sqlite,testkit}` paths absent. Reintroduce a bounded responsibility only through an accepted plan revision and a new production-graph baseline.
+- Do not recreate the displaced TypeScript runtime, its support scripts, or its testkit in the production tree.
 
 ## Hermes invariants
 

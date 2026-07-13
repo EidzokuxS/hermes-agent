@@ -194,7 +194,7 @@ Goal package создан в `docs/goals/nox-hermes-foundation-migration`. Пл�
 - [x] Task 3 — stable identity integration.
 - [x] Task 4 — observational causal bridge.
 - [x] Task 5 — Nox product mode and bounded branding.
-- [ ] Task 6 — displaced-path cutover and parity.
+- [x] Task 6 — displaced-path cutover and parity.
 - [ ] Task 7 — target-perspective evidence and final acceptance.
 
 ### Task 0 review
@@ -220,6 +220,10 @@ Production-контракт переведён с деклараций на ме
 ### Task 5 review
 
 Nox product mode завершён поверх сохранённого Hermes UX. Видимое имя, protocol/app IDs, Windows PE metadata, package artifacts и fresh data roots принадлежат Nox; внутренние Hermes backend/RPC names сохранены. Fresh installs идут side-by-side, существующие Hermes roots не выбираются и не меняются автоматически. Donor mascot/sprite assets удалены, packaged ASAR содержит только Nox-owned branding. Hidden packaged-Electron capture прошёл 1440×900, 900×700 и 400×620 без перехвата фокуса. Проверки: Desktop typecheck pass, lint 0 errors, UI 148 files / 1,197 tests, platform 333 tests / 330 pass / 3 host skips, build/package pass. Evidence: `docs/architecture/nox-product-mode-evidence.md`. Task 6 открыт после clean checkpoint.
+
+### Task 6 review
+
+Tasks 0–5 зафиксированы checkpoint-коммитом `8515ee78cc`, после чего удалены восемь displaced app/package roots, тринадцать first-loop support files и четыре неиспользуемых root TS/Vitest config. Graph gate теперь проверяет и недостижимость, и физическое отсутствие старого runtime. При cutover обнаружен и исправлен реальный разрыв product path: install/update/relaunch/uninstall искали `Hermes.exe`/`Hermes.app`, хотя пакет уже выпускался как Nox. Bootstrap Setup, shortcuts и executable discovery переведены на Nox. Проверки: Nox/causal/graph 85 pass; focused launcher/uninstaller 92 pass / 1 host skip; Desktop UI 1,197 pass; platform 330 pass / 3 host skips; Bootstrap Rust 27 pass; Desktop/Bootstrap typecheck и build pass; package pass. Evidence: `docs/architecture/displaced-path-cutover.md`. Task 7 открыт.
 
 ### Desktop readiness fix
 
