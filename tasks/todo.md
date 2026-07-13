@@ -263,6 +263,9 @@ Tasks 0–5 зафиксированы checkpoint-коммитом `8515ee78cc`,
 - [x] Воспроизвести живой разрыв: packaged `Nox.exe` выбрал unmanaged Hermes из `%LOCALAPPDATA%\hermes` и создал сессию без Nox identity metadata.
 - [x] Запретить packaged resolver выбирать `hermes` из `PATH` или system Python; сохранить явный source override и dev-only fallback.
 - [x] Сделать принятую `nox.identity` частью runtime readiness, а не только source/wheel тестов.
+- [x] Нормализовать переводы строк каноничной identity и закрепить `eol=lf`, чтобы чистый Windows checkout сохранял принятую ревизию.
+- [x] Остановить автоматический reinstall loop: не запускать второй bootstrap после успешной установки с провалившейся readiness-проверкой.
 - [ ] Установить или обновить Nox-owned runtime до достижимой ревизии текущей сборки.
-- [ ] Запустить настоящий package с чистым product home без source override и подтвердить backend provenance, новый Nox session и resume.
+- [x] Запустить настоящий package с чистым временным product home без source override; подтвердить Nox-owned backend provenance, принятую identity и новый Nox session через GUI.
+- [ ] Подтвердить resume той же Nox session после перезапуска настоящего package.
 - [ ] Пересобрать superseding evidence bundle; прежний release bundle считать историческим, а не доказательством текущего packaged runtime.
