@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from hashlib import sha256
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -72,6 +73,18 @@ def test_loads_the_accepted_canonical_document():
     assert identity.revision == ACCEPTED_NOX_IDENTITY_SHA256
     assert identity.prompt_text.startswith("# Nox\n\nI'm Nox:")
     assert identity.prompt_chars == len(identity.prompt_text)
+
+
+def test_windows_line_endings_preserve_the_accepted_revision(tmp_path):
+    canonical = Path("identity/NOX.md").read_text(encoding="utf-8")
+    windows_checkout = tmp_path / "NOX.md"
+    windows_checkout.write_bytes(canonical.replace("\n", "\r\n").encode("utf-8"))
+
+    with patch("nox.identity._candidate_paths", return_value=(windows_checkout,)):
+        identity = load_nox_identity()
+
+    assert identity.revision == ACCEPTED_NOX_IDENTITY_SHA256
+    assert "\r" not in identity.prompt_text
 
 
 def test_rejects_an_unaccepted_identity_revision(tmp_path):

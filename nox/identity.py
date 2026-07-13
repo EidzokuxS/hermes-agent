@@ -66,16 +66,24 @@ def load_nox_identity() -> NoxIdentitySnapshot:
         raise NoxIdentityError(f"Accepted Nox identity is missing; searched: {searched}")
 
     raw = identity_path.read_bytes()
-    revision = sha256(raw).hexdigest()
+    try:
+        decoded = raw.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise NoxIdentityError(
+            f"Nox identity is not valid UTF-8: {identity_path}"
+        ) from exc
+
+    # Git may materialize a tracked text file with CRLF on Windows even when
+    # the accepted blob uses LF. The identity revision describes the document,
+    # not the checkout's platform-specific newline representation.
+    canonical_text = decoded.replace("\r\n", "\n").replace("\r", "\n")
+    revision = sha256(canonical_text.encode("utf-8")).hexdigest()
     if revision != ACCEPTED_NOX_IDENTITY_SHA256:
         raise NoxIdentityError(
             "Nox identity revision mismatch: "
             f"expected {ACCEPTED_NOX_IDENTITY_SHA256}, got {revision} at {identity_path}"
         )
-    try:
-        prompt_text = raw.decode("utf-8").strip()
-    except UnicodeDecodeError as exc:
-        raise NoxIdentityError(f"Nox identity is not valid UTF-8: {identity_path}") from exc
+    prompt_text = canonical_text.strip()
     if not prompt_text:
         raise NoxIdentityError(f"Nox identity is empty: {identity_path}")
 

@@ -19,6 +19,8 @@
 //      falling through to the bootstrap installer.
 //   4. Packaged Nox reused an unmanaged Hermes CLI from PATH when its own
 //      side-by-side runtime was absent, bypassing the accepted Nox identity.
+//   5. A successful bootstrap immediately recursed into another bootstrap
+//      when the newly installed runtime still failed its readiness probe.
 
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
@@ -111,5 +113,28 @@ test('packaged Nox requires its product-owned runtime and accepted identity', ()
     resolverBody,
     /const python = useUnmanagedRuntime \? findSystemPython\(\) : null/,
     'system Python must be unreachable when packaged Nox owns the runtime'
+  )
+})
+
+test('a completed bootstrap cannot recurse into another automatic install', () => {
+  const source = readMain()
+  const ensureStart = source.indexOf('async function ensureRuntime(')
+  const ensureEnd = source.indexOf('\nfunction ', ensureStart + 1)
+  const ensureBody = source.slice(ensureStart, ensureEnd === -1 ? undefined : ensureEnd)
+
+  assert.match(
+    ensureBody,
+    /installedBackend\.kind === 'bootstrap-needed'/,
+    'bootstrap must detect a runtime that still fails readiness'
+  )
+  assert.match(
+    ensureBody,
+    /installation completed, but its runtime did not pass the readiness check/,
+    'the failed post-install readiness check must surface a stable recovery error'
+  )
+  assert.doesNotMatch(
+    ensureBody,
+    /return ensureRuntime\(resolveHermesBackend\(backend\.args\)\)/,
+    'a successful install must not recurse directly into another automatic bootstrap'
   )
 })

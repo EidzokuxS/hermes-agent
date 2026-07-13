@@ -3054,15 +3054,26 @@ function readBootstrapMarker() {
 function isActiveRuntimeUsable() {
   const venvPython = getVenvPython(VENV_ROOT)
 
-  return (
-    isHermesSourceRoot(ACTIVE_HERMES_ROOT) &&
-    fileExists(venvPython) &&
+  const sourceReady = isHermesSourceRoot(ACTIVE_HERMES_ROOT)
+  const pythonReady = fileExists(venvPython)
+
+  const runtimeReady =
+    sourceReady &&
+    pythonReady &&
     canImportNoxRuntime(venvPython, {
       env: {
         PYTHONPATH: [ACTIVE_HERMES_ROOT, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter)
       }
     })
-  )
+
+  if (!runtimeReady) {
+    rememberLog(
+      `[runtime] Nox-owned runtime is not ready: source=${sourceReady}, python=${pythonReady}, ` +
+        `probe=${runtimeReady}, executable=${venvPython}`
+    )
+  }
+
+  return runtimeReady
 }
 
 function isBootstrapComplete() {
@@ -3585,7 +3596,20 @@ async function ensureRuntime(backend) {
 
     // Re-resolve now that the install exists. The new resolution lands in
     // step 3 (bootstrap-complete marker) and we recurse to wire venvPython.
-    return ensureRuntime(resolveHermesBackend(backend.args))
+    const installedBackend = resolveHermesBackend(backend.args)
+
+    if (installedBackend.kind === 'bootstrap-needed') {
+      const readinessError = new Error(
+        'Nox installation completed, but its runtime did not pass the readiness check. ' +
+          `Check ${path.join(HERMES_HOME, 'logs', 'desktop.log')} before retrying or repairing the install.`
+      ) as any
+
+      readinessError.isBootstrapFailure = true
+      bootstrapFailure = readinessError
+      throw readinessError
+    }
+
+    return ensureRuntime(installedBackend)
   }
 
   // bootstrap=true with a real backend (createActiveBackend path) means we
