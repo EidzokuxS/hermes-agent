@@ -248,6 +248,8 @@ This plan deliberately ends with an observational bridge. A later plan may trans
 
 **Verification:** Locked Python/npm installs; root lint/type/test; Desktop build/package/smoke; identity eval; causal restart suite; production graph; evidence capture then offline verification; secret scan.
 
+**Security exception:** If this gate discovers a published vulnerability in a reachable locked dependency, the Task 0 manifest freeze may be revised only through a recorded deviation that names the affected packages, patched bounds and mandatory regression coverage. Final release evidence must be rebuilt from the remediated clean commit.
+
 **Acceptance evidence:** All required artifacts exist and verify. Эйдзи can complete the target journey in packaged Desktop. Any missing Nox acceptance, forced-restart correlation, packaged GUI proof or displaced-path proof leaves status `implemented but unproven` and prevents default-branch cutover.
 
 **Depends on:** Tasks 0–6.
