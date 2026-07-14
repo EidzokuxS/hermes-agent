@@ -271,3 +271,13 @@ Tasks 0–5 зафиксированы checkpoint-коммитом `8515ee78cc`,
 - [x] Пересобрать superseding evidence bundle; прежний release bundle считать историческим, а не доказательством текущего packaged runtime.
 
 Настоящий first-launch из пустого product home получил installer с Nox fork, после SSH fallback клонировал его по HTTPS и установил опубликованную package revision в Nox-owned venv. После двух диагностических прогонов были устранены две независимые причины зависания: auxiliary title-generation больше не конкурирует с основным Codex turn в Nox product mode, а first-byte watchdog остаётся включённым для штатного размера Nox prompt. Clean package `dbe32d4e081bb28ae1c471f5a137223d27cba946` завершил три Sol Medium turn, attachment/skill/terminal, interrupt, backend kill, полный Desktop restart и resume той же session `20260714_075910_e5a2c6`. Journal audit: 25 records, 6 external turns, 3 process epochs, 3 complete / 1 interrupted / 2 abandoned, 3 resume, zero issues. Superseding bundle `artifacts/evidence/hermes-foundation/20260714-dbe32d4-full` финализирован с решением `release` и offline-верифицирован: 36 files, status `pass`. Временная копия `auth.json` удалена.
+
+## Continuing state: continuity context
+
+- [x] Выбрать первый post-migration primitive и зафиксировать границы authority.
+- [x] Определить первую проверяемую точку успеха без фоновой имитации автономности.
+- [ ] Реализовать bounded `nox.continuity_context` поверх Hermes SessionDB и causal cursor.
+- [ ] Подключить projection к API-only per-turn context без transcript mutation и auxiliary model call.
+- [ ] Доказать cross-session discovery, restart reconstruction и штатный `session_search` retrieval.
+
+Первый primitive — не пересказ всей памяти и не таймер активности. Каждый act получает заново собранную карту времени и доступной истории; содержимое прошлого остаётся в каноническом Hermes archive и извлекается только при релевантности. Contract: `docs/goals/nox-continuity-context/PLAN.md`.
