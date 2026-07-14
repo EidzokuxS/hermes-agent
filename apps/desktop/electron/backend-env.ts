@@ -100,6 +100,10 @@ function buildDesktopBackendEnv({
   const key = pathEnvKey(currentEnv, platform)
 
   return {
+    // Nox's normal system prompt is already above Hermes' 10k default cutoff.
+    // Keep the bounded Codex first-byte watchdog active until a request is
+    // genuinely large so a silent subscription stream cannot pin the cortex.
+    HERMES_CODEX_TTFB_DISABLE_ABOVE_TOKENS: '100000',
     NOX_PRODUCT_MODE: '1',
     PYTHONPATH: appendUniquePathEntries([...pythonPathEntries, currentPythonPath], { delimiter }),
     [key]: buildDesktopBackendPath({
