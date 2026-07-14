@@ -915,6 +915,7 @@ async function runJourney(context) {
 
   let launched = await launchDesktop(context)
   let client = null
+  let finalizationError = null
 
   try {
     await delay(20_000)
@@ -1111,8 +1112,27 @@ async function runJourney(context) {
     if (fs.existsSync(journal)) {
       const evidenceJournal = path.join(runtimeDir, 'nox-journal.sqlite')
       sqliteBackup(journal, evidenceJournal, context.repoRoot)
-      writeJson(path.join(runtimeDir, 'causal-correlation.json'), causalAudit(evidenceJournal, context.repoRoot))
+      try {
+        writeJson(path.join(runtimeDir, 'causal-correlation.json'), causalAudit(evidenceJournal, context.repoRoot))
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        writeJson(path.join(runtimeDir, 'causal-correlation.json'), {
+          error: message,
+          status: 'fail'
+        })
+        if (journey.status === 'pass') {
+          journey.error = message
+          journey.status = 'fail'
+          writeJson(path.join(context.workDirectory, 'journey.json'), journey)
+          writeJson(path.join(runtimeDir, 'restart-report.json'), journey)
+          finalizationError = error
+        }
+      }
     }
+  }
+
+  if (finalizationError) {
+    throw finalizationError
   }
 }
 

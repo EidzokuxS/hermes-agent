@@ -256,6 +256,22 @@ class TestAutoTitleSession:
             auto_title_session(db, "sess-1", "hi", "hello")
             db.set_session_title.assert_not_called()
 
+    def test_nox_product_mode_uses_user_message_without_model_call(self, monkeypatch):
+        db = MagicMock()
+        db.get_session_title.return_value = None
+        monkeypatch.setenv("NOX_PRODUCT_MODE", "1")
+
+        with patch("agent.title_generator.generate_title") as generate:
+            auto_title_session(
+                db,
+                "sess-1",
+                "  Проверь   непрерывность\nНокс  ",
+                "Ответ модели не нужен для заголовка",
+            )
+
+        generate.assert_not_called()
+        db.set_session_title.assert_called_once_with("sess-1", "Проверь непрерывность Нокс")
+
 
 class TestMaybeAutoTitle:
     """Tests for maybe_auto_title() — the fire-and-forget entry point."""

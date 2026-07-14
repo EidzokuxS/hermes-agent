@@ -1,10 +1,12 @@
-"""Auto-generate short session titles from the first user/assistant exchange.
+"""Create short session titles from the first user/assistant exchange.
 
 Runs asynchronously after the first response is delivered so it never
-adds latency to the user-facing reply.
+adds latency to the user-facing reply. Nox Desktop derives its title from
+the first user message so cosmetic work never opens a competing model call.
 """
 
 import logging
+import os
 import threading
 from typing import Callable, Optional
 
@@ -32,6 +34,14 @@ _TITLE_PROMPT_PINNED_LANGUAGE = (
     "Write the title in {language}. "
     "Return ONLY the title text, nothing else. No quotes, no punctuation at the end, no prefixes."
 )
+
+
+def _local_title(user_message: str) -> Optional[str]:
+    """Return a compact title without invoking another model."""
+    title = " ".join((user_message or "").split()).strip()
+    if len(title) > 80:
+        title = title[:77].rstrip() + "..."
+    return title or None
 
 
 def _title_language() -> str:
@@ -145,9 +155,12 @@ def auto_title_session(
     except Exception:
         return
 
-    title = generate_title(
-        user_message, assistant_response, failure_callback=failure_callback, main_runtime=main_runtime
-    )
+    if os.getenv("NOX_PRODUCT_MODE") == "1":
+        title = _local_title(user_message)
+    else:
+        title = generate_title(
+            user_message, assistant_response, failure_callback=failure_callback, main_runtime=main_runtime
+        )
     if not title:
         return
 
