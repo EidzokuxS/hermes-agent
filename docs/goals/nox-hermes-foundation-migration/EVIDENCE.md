@@ -140,3 +140,12 @@ The previous Nox revision hashes `e43ad17d4c47df63ff776dc057df115ff9525302c63f5d
 - A subsequent packaged launch reused the installed runtime without entering bootstrap and restored the exact same session. `scripts/nox_desktop_evidence.mjs --session <id>` now requires agreement between the renderer route, SQLite session/identity binding and the causal Journal across at least two process epochs.
 - The restart proof passed: the Journal terminally settled the in-flight turn as `turn.abandoned` at `process-restart`, then recorded `session.resumed` for the same Hermes session and reconciled the abandoned bridge turn. This proves packaged storage and causal resume; it does not replace the still-required superseding full journey bundle.
 
+### Superseding packaged journey
+
+- Clean package commit `dbe32d4e081bb28ae1c471f5a137223d27cba946` reused the already proven Nox-owned runtime rather than repeating bootstrap for every evidence step.
+- Nox product mode derives session titles locally, so metadata cannot open a competing auxiliary model stream. The no-byte watchdog remains active for the normal Nox prompt and is disabled only above 100,000 estimated input tokens.
+- Session `20260714_075910_e5a2c6` completed three `openai-codex` / `gpt-5.6-sol` / medium turns, including multi-turn identity continuity plus attachment, skill and terminal evidence. The same journey recorded a UI interrupt, backend termination during an active tool turn and full Desktop resume.
+- Independent Journal audit passed with 25 records, six external turns and three process epochs: three completed, one interrupted, two abandoned, three session resumes and zero audit issues.
+- The immediate post-restart screenshot exposed black transparent-compositor tiles and was rejected. A separate packaged-process launch recaptured the same persisted session with a ready gateway and usable composer.
+- Superseding bundle `artifacts/evidence/hermes-foundation/20260714-dbe32d4-full` contains 36 manifested files and passes offline verification with decision `release`. The previous bundle remains historical evidence for its source revision.
+

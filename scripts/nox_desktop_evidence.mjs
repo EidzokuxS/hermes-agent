@@ -388,7 +388,18 @@ async function clickComposerAction(client, expectedAction = 'send') {
   })()`)
 }
 
-async function submitCurrentComposer(client, label, timeoutMs = 360_000) {
+async function clickPendingToolApproval(client) {
+  return await client.evaluate(`(() => {
+    const button = [...document.querySelectorAll('button')].find(candidate =>
+      !candidate.disabled && candidate.innerText.trim().startsWith('Run')
+    )
+    if (!button) return { ok: false }
+    button.click()
+    return { ok: true }
+  })()`)
+}
+
+async function submitCurrentComposer(client, label, timeoutMs = 360_000, { approveTools = false } = {}) {
   const before = await messageCounts(client)
   const startedAt = Date.now()
   await waitFor(
@@ -435,15 +446,22 @@ async function submitCurrentComposer(client, label, timeoutMs = 360_000) {
   )
 
   let observedStreaming = false
+  let approvedToolCalls = 0
   const completionDeadline = Date.now() + timeoutMs
 
   while (Date.now() < completionDeadline) {
     const current = await messageCounts(client)
     observedStreaming ||= current.streamingAssistants > 0
 
+    if (approveTools) {
+      const approval = await clickPendingToolApproval(client)
+      approvedToolCalls += approval?.ok ? 1 : 0
+    }
+
     if (current.completedAssistants > before.completedAssistants) {
       return {
         after: current,
+        approved_tool_calls: approvedToolCalls,
         before,
         duration_ms: Date.now() - startedAt,
         observed_streaming: observedStreaming,
@@ -950,7 +968,9 @@ async function runJourney(context) {
     )
     await dropInternalFile(client, attachmentPath)
     const toolBefore = await messageCounts(client)
-    const toolTurn = await submitCurrentComposer(client, 'skill, tool and attachment turn')
+    const toolTurn = await submitCurrentComposer(client, 'skill, tool and attachment turn', 360_000, {
+      approveTools: true
+    })
     await waitFor(
       client,
       `document.querySelectorAll('[data-slot="tool-block"]').length > ${toolBefore.toolBlocks}`,
