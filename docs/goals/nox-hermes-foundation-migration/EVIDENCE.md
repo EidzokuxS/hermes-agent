@@ -133,3 +133,10 @@ The previous Nox revision hashes `e43ad17d4c47df63ff776dc057df115ff9525302c63f5d
 - Validation: Nox identity/causal/graph `85` pass; focused graph plus GUI launcher/uninstaller `92` pass / one host skip; Desktop UI `1,197` pass; Desktop platform `330` pass / three host skips; Bootstrap Rust `27` pass; Desktop/Bootstrap typecheck and builds pass; Desktop lint zero errors; packaged `Nox.exe` SHA-256 `ccc85da7ee2bf88a1cdf035853248f5332ebaf8bad52196c1daa6800442f20c0`.
 - Detailed deletion inventory and proof: `docs/architecture/displaced-path-cutover.md`.
 
+## Packaged runtime ownership continuation
+
+- A genuine first launch from an empty temporary product home fetched the installer from the Nox fork, fell back from unavailable SSH authentication to HTTPS, and installed the package-stamped revision `9e71a6bd1002aefa986360f9d271a80719c0ebb7` into the Nox-owned virtual environment. No source override or unmanaged Hermes runtime was selected.
+- The packaged GUI created session `20260714_070138_de01e1` with accepted identity revision `5d65771dfeec0ad50897fac123dfe4f358944d706edc5cc4fb9d7475b2f86a78`, provider `openai-codex`, model `gpt-5.6-sol` and medium reasoning. The provider returned no response bytes within 360 seconds, so this run does not claim a completed model response.
+- A subsequent packaged launch reused the installed runtime without entering bootstrap and restored the exact same session. `scripts/nox_desktop_evidence.mjs --session <id>` now requires agreement between the renderer route, SQLite session/identity binding and the causal Journal across at least two process epochs.
+- The restart proof passed: the Journal terminally settled the in-flight turn as `turn.abandoned` at `process-restart`, then recorded `session.resumed` for the same Hermes session and reconciled the abandoned bridge turn. This proves packaged storage and causal resume; it does not replace the still-required superseding full journey bundle.
+

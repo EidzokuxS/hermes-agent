@@ -265,7 +265,9 @@ Tasks 0–5 зафиксированы checkpoint-коммитом `8515ee78cc`,
 - [x] Сделать принятую `nox.identity` частью runtime readiness, а не только source/wheel тестов.
 - [x] Нормализовать переводы строк каноничной identity и закрепить `eol=lf`, чтобы чистый Windows checkout сохранял принятую ревизию.
 - [x] Остановить автоматический reinstall loop: не запускать второй bootstrap после успешной установки с провалившейся readiness-проверкой.
-- [ ] Установить или обновить Nox-owned runtime до достижимой ревизии текущей сборки.
+- [x] Установить или обновить Nox-owned runtime до достижимой ревизии текущей сборки.
 - [x] Запустить настоящий package с чистым временным product home без source override; подтвердить Nox-owned backend provenance, принятую identity и новый Nox session через GUI.
-- [ ] Подтвердить resume той же Nox session после перезапуска настоящего package.
+- [x] Подтвердить resume той же Nox session после перезапуска настоящего package.
 - [ ] Пересобрать superseding evidence bundle; прежний release bundle считать историческим, а не доказательством текущего packaged runtime.
+
+Настоящий first-launch из пустого product home получил installer с Nox fork, после SSH fallback клонировал его по HTTPS и установил ровно опубликованную package revision `9e71a6bd1002aefa986360f9d271a80719c0ebb7` в Nox-owned venv. Новый GUI session `20260714_070138_de01e1` сохранил принятую identity revision `5d65771dfeec0ad50897fac123dfe4f358944d706edc5cc4fb9d7475b2f86a78`; provider принял `openai-codex / gpt-5.6-sol / medium`, но не вернул байтов за 360 секунд, поэтому completed-response evidence не заявляется. Повторный запуск настоящего package без bootstrap открыл тот же session ID; обновлённый evidence probe механически сверил renderer route, persisted session/identity и Journal. Journal содержит новый process epoch, terminal `turn.abandoned` со stage `process-restart` и `session.resumed`, которое reconciles исходный in-flight turn. Полный superseding bundle остаётся открытым до успешного bounded provider turn и финальной упаковки артефактов.

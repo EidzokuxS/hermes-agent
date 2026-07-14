@@ -614,7 +614,7 @@ function assertBackendProvenance(context, rootPid, phase) {
   }
 }
 
-function readIdentityBinding(context, pythonPath) {
+function readIdentityBinding(context, pythonPath, sessionId = null) {
   const stateDb = path.join(context.noxHome, 'state.db')
 
   if (!fs.existsSync(stateDb)) {
@@ -624,15 +624,16 @@ function readIdentityBinding(context, pythonPath) {
   const code = [
     'import hashlib, json, sqlite3, sys',
     'connection = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)',
-    'row = connection.execute("SELECT system_prompt, nox_identity_revision, nox_identity_chars, nox_identity_prompt_sha256 FROM sessions ORDER BY started_at DESC LIMIT 1").fetchone()',
+    'session_id = sys.argv[2] or None',
+    'row = connection.execute("SELECT id, system_prompt, nox_identity_revision, nox_identity_chars, nox_identity_prompt_sha256 FROM sessions WHERE id = ?", (session_id,)).fetchone() if session_id else connection.execute("SELECT id, system_prompt, nox_identity_revision, nox_identity_chars, nox_identity_prompt_sha256 FROM sessions ORDER BY started_at DESC LIMIT 1").fetchone()',
     'connection.close()',
     'assert row is not None, "no live Nox session was persisted"',
-    'prompt, revision, chars, prompt_hash = row',
+    'persisted_session_id, prompt, revision, chars, prompt_hash = row',
     'assert revision and chars and prompt_hash, "latest session has no Nox identity metadata"',
     'prefix_hash = hashlib.sha256(prompt[:chars].encode("utf-8")).hexdigest()',
-    'print(json.dumps({"identity_chars": chars, "identity_revision": revision, "prefix_sha256": prefix_hash, "prefix_matches": prefix_hash == prompt_hash, "status": "pass" if prefix_hash == prompt_hash else "fail"}))'
+    'print(json.dumps({"identity_chars": chars, "identity_revision": revision, "prefix_sha256": prefix_hash, "prefix_matches": prefix_hash == prompt_hash, "session_id": persisted_session_id, "status": "pass" if prefix_hash == prompt_hash else "fail"}))'
   ].join('; ')
-  const result = spawnSync(pythonPath, ['-c', code, stateDb], {
+  const result = spawnSync(pythonPath, ['-c', code, stateDb, sessionId || ''], {
     cwd: context.workDirectory,
     encoding: 'utf8',
     stdio: 'pipe',
@@ -649,6 +650,53 @@ function readIdentityBinding(context, pythonPath) {
   }
 
   return binding
+}
+
+function readResumeContinuity(context, pythonPath, sessionId) {
+  const journal = path.join(context.noxHome, 'nox', 'journal.sqlite3')
+
+  if (!fs.existsSync(journal)) {
+    throw new Error(`Nox Journal is missing after restart: ${journal}`)
+  }
+
+  const code = [
+    'import json, sqlite3, sys',
+    'connection = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)',
+    'rows = connection.execute("SELECT sequence, kind, process_epoch, terminal, record_json FROM bridge_records WHERE hermes_session_id = ? ORDER BY sequence", (sys.argv[2],)).fetchall()',
+    'connection.close()',
+    'records = [{"sequence": row[0], "kind": row[1], "process_epoch": row[2], "terminal": bool(row[3]), "reconciled_turn_ids": json.loads(row[4]).get("reconciled_turn_ids", [])} for row in rows]',
+    'process_epochs = sorted({record["process_epoch"] for record in records})',
+    'resume_records = [record for record in records if record["kind"] == "session.resumed"]',
+    'status = "pass" if len(process_epochs) >= 2 and resume_records else "fail"',
+    'print(json.dumps({"process_epochs": process_epochs, "records": records, "resume_count": len(resume_records), "session_id": sys.argv[2], "status": status}))'
+  ].join('; ')
+  const result = spawnSync(pythonPath, ['-c', code, journal, sessionId], {
+    cwd: context.workDirectory,
+    encoding: 'utf8',
+    stdio: 'pipe',
+    windowsHide: true
+  })
+
+  if (result.status !== 0) {
+    throw new Error(`Could not verify Nox restart continuity: ${result.stderr.trim()}`)
+  }
+
+  const continuity = JSON.parse(result.stdout)
+  if (continuity.status !== 'pass') {
+    throw new Error(`Nox restart did not resume the expected causal session: ${result.stdout.trim()}`)
+  }
+
+  return continuity
+}
+
+function sessionIdFromRendererUrl(value) {
+  const hash = new URL(value).hash
+
+  if (!hash.startsWith('#/')) {
+    return null
+  }
+
+  return decodeURIComponent(hash.slice(2).split('/')[0].split('?')[0]) || null
 }
 
 function killProcess(pid) {
@@ -783,15 +831,39 @@ async function runProbe(context) {
       await waitFor(
         client,
         `Boolean(document.querySelector('button[aria-label="Send message"]')) ||
-          document.body.innerText.includes('Gateway\nconnected')`,
+          document.body.innerText.includes('Gateway\\nready') ||
+          document.body.innerText.includes('Gateway\\nconnected')`,
         'connected composer',
         180_000
       )
     }
     const snapshot = await bodySnapshot(client)
+    const rendererSessionId = sessionIdFromRendererUrl(snapshot.url)
+    const identity =
+      context.expectedSessionId || context.prompt
+        ? readIdentityBinding(context, provenance.executable_path, context.expectedSessionId)
+        : null
+
+    if (context.expectedSessionId) {
+      if (rendererSessionId !== context.expectedSessionId) {
+        throw new Error(`Renderer resumed ${rendererSessionId || 'no session'} instead of ${context.expectedSessionId}`)
+      }
+      if (identity?.session_id !== context.expectedSessionId) {
+        throw new Error(
+          `Persisted session ${identity?.session_id || 'is missing'} instead of ${context.expectedSessionId}`
+        )
+      }
+      writeJson(path.join(context.workDirectory, 'session-resume.json'), {
+        expected_session_id: context.expectedSessionId,
+        identity,
+        journal: readResumeContinuity(context, provenance.executable_path, context.expectedSessionId),
+        renderer_session_id: rendererSessionId,
+        status: 'pass'
+      })
+    }
     fs.writeFileSync(path.join(context.workDirectory, 'renderer-probe.json'), `${JSON.stringify(snapshot, null, 2)}\n`)
     writeJson(path.join(context.workDirectory, 'backend-provenance.json'), {
-      identity: context.prompt ? readIdentityBinding(context, provenance.executable_path) : null,
+      identity,
       runtime: provenance
     })
     await capture(client, path.join(context.workDirectory, 'renderer-probe.png'))
@@ -1063,6 +1135,7 @@ async function main() {
 
   const context = {
     executable,
+    expectedSessionId: args.session || null,
     noxHome,
     prompt: args.prompt || null,
     repoRoot,
